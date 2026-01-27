@@ -1,0 +1,4 @@
+project_id = "dbqnwvwsufsshuxispcr"
+
+[functions.generate-report]
+verify_jwt = false

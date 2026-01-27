@@ -1,0 +1,275 @@
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Header } from '@/components/Header';
+import { getReport, updateReport, deleteReport, Report, ReportType } from '@/lib/db';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { ArrowLeft, Save, Trash2, Download, Edit, FileText, ClipboardList, Stethoscope, Loader2 } from 'lucide-react';
+import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
+
+const typeConfig: Record<ReportType, { label: string; icon: typeof FileText; color: string }> = {
+  general: { label: 'General Clinical Note', icon: FileText, color: 'bg-primary/10 text-primary' },
+  soap: { label: 'SOAP Notes', icon: ClipboardList, color: 'bg-success/10 text-success' },
+  diagnostic: { label: 'Diagnostic Report', icon: Stethoscope, color: 'bg-accent/10 text-accent' },
+};
+
+export default function ReportDetail() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  
+  const [report, setReport] = useState<Report | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const loadReport = async () => {
+      if (!id) return;
+      
+      try {
+        const data = await getReport(id);
+        if (data) {
+          setReport(data);
+          setEditedContent(data.reportContent);
+        } else {
+          toast({
+            variant: 'destructive',
+            title: 'Report not found',
+            description: 'The requested report could not be found.',
+          });
+          navigate('/history');
+        }
+      } catch (err) {
+        console.error('Failed to load report:', err);
+        toast({
+          variant: 'destructive',
+          title: 'Failed to load report',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadReport();
+  }, [id, navigate, toast]);
+
+  const handleSave = async () => {
+    if (!report) return;
+    
+    setIsSaving(true);
+    try {
+      await updateReport(report.id, { reportContent: editedContent });
+      setReport({ ...report, reportContent: editedContent });
+      setIsEditing(false);
+      toast({ title: 'Report saved' });
+    } catch (err) {
+      toast({
+        variant: 'destructive',
+        title: 'Save failed',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!report) return;
+    
+    try {
+      await deleteReport(report.id);
+      toast({ title: 'Report deleted' });
+      navigate('/history');
+    } catch (err) {
+      toast({
+        variant: 'destructive',
+        title: 'Delete failed',
+      });
+    }
+  };
+
+  const handleDownload = () => {
+    if (!report) return;
+
+    const content = `
+MediVoice Report
+================
+Date: ${format(new Date(report.createdAt), 'MMMM d, yyyy h:mm a')}
+Type: ${typeConfig[report.reportType].label}
+Duration: ${Math.floor(report.duration / 60)}:${(report.duration % 60).toString().padStart(2, '0')}
+Word Count: ${report.wordCount}
+
+--- Original Transcription ---
+${report.transcription}
+
+--- Generated Report ---
+${report.reportContent}
+    `.trim();
+
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `medivoice-report-${format(new Date(report.createdAt), 'yyyy-MM-dd-HHmm')}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container flex max-w-4xl items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </main>
+      </div>
+    );
+  }
+
+  if (!report) return null;
+
+  const config = typeConfig[report.reportType];
+  const Icon = config.icon;
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      
+      <main className="container max-w-4xl py-8">
+        <Button
+          variant="ghost"
+          onClick={() => navigate('/history')}
+          className="mb-6 gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to History
+        </Button>
+
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className={cn('rounded-lg p-3', config.color)}>
+                  <Icon className="h-6 w-6" />
+                </div>
+                <div>
+                  <CardTitle>{config.label}</CardTitle>
+                  <CardDescription>
+                    {format(new Date(report.createdAt), 'MMMM d, yyyy')} at {format(new Date(report.createdAt), 'h:mm a')}
+                  </CardDescription>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {isEditing ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsEditing(false);
+                        setEditedContent(report.reportContent);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button onClick={handleSave} disabled={isSaving} className="gap-2">
+                      {isSaving ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                      Save
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="outline" onClick={() => setIsEditing(true)} className="gap-2">
+                      <Edit className="h-4 w-4" />
+                      Edit
+                    </Button>
+                    <Button variant="outline" onClick={handleDownload} className="gap-2">
+                      <Download className="h-4 w-4" />
+                      Download
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" className="text-destructive hover:bg-destructive/10">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete this report?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This action cannot be undone. The report will be permanently deleted.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={handleDelete}
+                            className="bg-destructive hover:bg-destructive/90"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-4 text-sm text-muted-foreground">
+              <span>Duration: {Math.floor(report.duration / 60)}:{(report.duration % 60).toString().padStart(2, '0')}</span>
+              <span>•</span>
+              <span>{report.wordCount} words</span>
+            </div>
+          </CardHeader>
+
+          <CardContent>
+            <Tabs defaultValue="report">
+              <TabsList className="mb-4">
+                <TabsTrigger value="report">Report</TabsTrigger>
+                <TabsTrigger value="transcription">Original Transcription</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="report">
+                {isEditing ? (
+                  <Textarea
+                    value={editedContent}
+                    onChange={(e) => setEditedContent(e.target.value)}
+                    className="min-h-[400px] font-mono text-sm"
+                  />
+                ) : (
+                  <ScrollArea className="h-[400px] rounded-md border p-4">
+                    <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                      {report.reportContent}
+                    </div>
+                  </ScrollArea>
+                )}
+              </TabsContent>
+
+              <TabsContent value="transcription">
+                <ScrollArea className="h-[400px] rounded-md border p-4">
+                  <p className="whitespace-pre-wrap text-muted-foreground">
+                    {report.transcription}
+                  </p>
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      </main>
+    </div>
+  );
+}
