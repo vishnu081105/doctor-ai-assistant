@@ -2,14 +2,16 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { getReport, updateReport, deleteReport, Report, ReportType } from '@/lib/db';
+import { downloadReportAsPDF } from '@/utils/pdfExport';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Save, Trash2, Download, Edit, FileText, ClipboardList, Stethoscope, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Download, Edit, FileText, ClipboardList, Stethoscope, Loader2, FileDown, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -17,7 +19,7 @@ import { cn } from '@/lib/utils';
 const typeConfig: Record<ReportType, { label: string; icon: typeof FileText; color: string }> = {
   general: { label: 'General Clinical Note', icon: FileText, color: 'bg-primary/10 text-primary' },
   soap: { label: 'SOAP Notes', icon: ClipboardList, color: 'bg-success/10 text-success' },
-  diagnostic: { label: 'Diagnostic Report', icon: Stethoscope, color: 'bg-accent/10 text-accent' },
+  diagnostic: { label: 'Surgical Pathology Report', icon: Stethoscope, color: 'bg-accent/10 text-accent' },
 };
 
 export default function ReportDetail() {
@@ -96,7 +98,7 @@ export default function ReportDetail() {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownloadTxt = () => {
     if (!report) return;
 
     const content = `
@@ -123,6 +125,12 @@ ${report.reportContent}
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadPdf = () => {
+    if (!report) return;
+    downloadReportAsPDF(report);
+    toast({ title: 'PDF downloaded' });
   };
 
   if (isLoading) {
@@ -155,15 +163,15 @@ ${report.reportContent}
           Back to History
         </Button>
 
-        <Card>
-          <CardHeader>
+        <Card className="overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-card to-secondary/20">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex items-center gap-3">
-                <div className={cn('rounded-lg p-3', config.color)}>
+                <div className={cn('rounded-xl p-3 shadow-sm', config.color)}>
                   <Icon className="h-6 w-6" />
                 </div>
                 <div>
-                  <CardTitle>{config.label}</CardTitle>
+                  <CardTitle className="text-xl">{config.label}</CardTitle>
                   <CardDescription>
                     {format(new Date(report.createdAt), 'MMMM d, yyyy')} at {format(new Date(report.createdAt), 'h:mm a')}
                   </CardDescription>
@@ -196,10 +204,25 @@ ${report.reportContent}
                       <Edit className="h-4 w-4" />
                       Edit
                     </Button>
-                    <Button variant="outline" onClick={handleDownload} className="gap-2">
-                      <Download className="h-4 w-4" />
-                      Download
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="gap-2">
+                          <Download className="h-4 w-4" />
+                          Download
+                          <ChevronDown className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={handleDownloadPdf} className="gap-2">
+                          <FileDown className="h-4 w-4" />
+                          Download as PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleDownloadTxt} className="gap-2">
+                          <FileText className="h-4 w-4" />
+                          Download as Text
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="ghost" className="text-destructive hover:bg-destructive/10">
@@ -236,11 +259,17 @@ ${report.reportContent}
             </div>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="pt-6">
             <Tabs defaultValue="report">
-              <TabsList className="mb-4">
-                <TabsTrigger value="report">Report</TabsTrigger>
-                <TabsTrigger value="transcription">Original Transcription</TabsTrigger>
+              <TabsList className="mb-4 w-full justify-start">
+                <TabsTrigger value="report" className="gap-2">
+                  <FileText className="h-4 w-4" />
+                  Report
+                </TabsTrigger>
+                <TabsTrigger value="transcription" className="gap-2">
+                  <ClipboardList className="h-4 w-4" />
+                  Original Transcription
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="report">
@@ -251,8 +280,8 @@ ${report.reportContent}
                     className="min-h-[400px] font-mono text-sm"
                   />
                 ) : (
-                  <ScrollArea className="h-[400px] rounded-md border p-4">
-                    <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                  <ScrollArea className="h-[400px] rounded-lg border bg-secondary/30 p-4">
+                    <div className="prose prose-sm max-w-none whitespace-pre-wrap dark:prose-invert">
                       {report.reportContent}
                     </div>
                   </ScrollArea>
@@ -260,7 +289,7 @@ ${report.reportContent}
               </TabsContent>
 
               <TabsContent value="transcription">
-                <ScrollArea className="h-[400px] rounded-md border p-4">
+                <ScrollArea className="h-[400px] rounded-lg border bg-secondary/30 p-4">
                   <p className="whitespace-pre-wrap text-muted-foreground">
                     {report.transcription}
                   </p>

@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Header } from '@/components/Header';
+import { TemplateManager } from '@/components/TemplateManager';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { getSetting, setSetting, clearAllReports, clearAllSettings, ReportType } from '@/lib/db';
+import { getSetting, setSetting, clearAllReports, clearAllSettings, clearAllTemplates, ReportType } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, Languages, FileText, Clock } from 'lucide-react';
+import { Trash2, Languages, FileText, Clock, Moon, Sun, Monitor, Bookmark } from 'lucide-react';
+import { useTheme } from 'next-themes';
 
 export default function Settings() {
   const [defaultReportType, setDefaultReportType] = useState<ReportType>('general');
@@ -17,6 +18,7 @@ export default function Settings() {
   const [showTimestamps, setShowTimestamps] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
   const { toast } = useToast();
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -55,9 +57,10 @@ export default function Settings() {
     try {
       await clearAllReports();
       await clearAllSettings();
+      await clearAllTemplates();
       toast({
         title: 'All data cleared',
-        description: 'Your reports and settings have been deleted.',
+        description: 'Your reports, templates, and settings have been deleted.',
       });
       // Reset to defaults
       setDefaultReportType('general');
@@ -87,6 +90,51 @@ export default function Settings() {
         </div>
 
         <div className="space-y-6">
+          {/* Theme Settings */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                  <Moon className="h-5 w-5" />
+                </div>
+                <div>
+                  <CardTitle>Appearance</CardTitle>
+                  <CardDescription>Customize how MediVoice looks</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="theme">Theme</Label>
+                <Select value={theme} onValueChange={setTheme}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="light">
+                      <div className="flex items-center gap-2">
+                        <Sun className="h-4 w-4" />
+                        Light
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="dark">
+                      <div className="flex items-center gap-2">
+                        <Moon className="h-4 w-4" />
+                        Dark
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="system">
+                      <div className="flex items-center gap-2">
+                        <Monitor className="h-4 w-4" />
+                        System
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Report Settings */}
           <Card>
             <CardHeader>
@@ -110,10 +158,28 @@ export default function Settings() {
                   <SelectContent>
                     <SelectItem value="general">General Clinical Note</SelectItem>
                     <SelectItem value="soap">SOAP Notes</SelectItem>
-                    <SelectItem value="diagnostic">Diagnostic Report</SelectItem>
+                    <SelectItem value="diagnostic">Surgical Pathology Report</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Templates */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                  <Bookmark className="h-5 w-5" />
+                </div>
+                <div>
+                  <CardTitle>Templates</CardTitle>
+                  <CardDescription>Create reusable phrases and report structures</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <TemplateManager mode="manage" />
             </CardContent>
           </Card>
 
@@ -203,7 +269,7 @@ export default function Settings() {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This will permanently delete all your saved reports and settings. This action cannot be undone.
+                      This will permanently delete all your saved reports, templates, and settings. This action cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
