@@ -2,12 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { Header } from '@/components/Header';
 import { AudioWaveform } from '@/components/AudioWaveform';
 import { ReportTypeSelector } from '@/components/ReportTypeSelector';
+import { TranscriptionEditor } from '@/components/TranscriptionEditor';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Mic, Square, Sparkles, Loader2, Save, RotateCcw, AlertCircle } from 'lucide-react';
+import { Mic, Square, Sparkles, Loader2, Save, RotateCcw, AlertCircle, Edit } from 'lucide-react';
 import { ReportType, saveReport, generateId } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -18,6 +18,8 @@ export default function Dashboard() {
   const [generatedReport, setGeneratedReport] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const [isEditingTranscription, setIsEditingTranscription] = useState(false);
+  const [editedTranscript, setEditedTranscript] = useState('');
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   
   const { toast } = useToast();
@@ -33,6 +35,13 @@ export default function Dashboard() {
     isSupported,
     error,
   } = useSpeechRecognition();
+
+  // Sync edited transcript with live transcript
+  useEffect(() => {
+    if (!isEditingTranscription) {
+      setEditedTranscript(transcript);
+    }
+  }, [transcript, isEditingTranscription]);
 
   // Recording timer
   useEffect(() => {
@@ -54,6 +63,7 @@ export default function Dashboard() {
   const handleStartRecording = () => {
     setRecordingDuration(0);
     setGeneratedReport('');
+    setIsEditingTranscription(false);
     startListening();
   };
 
@@ -65,9 +75,18 @@ export default function Dashboard() {
     resetTranscript();
     setGeneratedReport('');
     setRecordingDuration(0);
+    setIsEditingTranscription(false);
+    setEditedTranscript('');
   };
 
-  const wordCount = (transcript + ' ' + interimTranscript).trim().split(/\s+/).filter(Boolean).length;
+  const handleSaveTranscriptionEdit = (text: string) => {
+    setEditedTranscript(text);
+    setIsEditingTranscription(false);
+    toast({ title: 'Transcription updated' });
+  };
+
+  const currentTranscript = isEditingTranscription ? editedTranscript : (editedTranscript || transcript);
+  const wordCount = (currentTranscript + ' ' + interimTranscript).trim().split(/\s+/).filter(Boolean).length;
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -76,7 +95,8 @@ export default function Dashboard() {
   };
 
   const generateReport = async () => {
-    if (!transcript.trim()) {
+    const textToProcess = editedTranscript || transcript;
+    if (!textToProcess.trim()) {
       toast({
         variant: 'destructive',
         title: 'No transcription',
@@ -98,7 +118,7 @@ export default function Dashboard() {
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
           body: JSON.stringify({
-            transcription: transcript,
+            transcription: textToProcess,
             reportType,
           }),
         }
@@ -179,7 +199,7 @@ export default function Dashboard() {
     try {
       const report = {
         id: generateId(),
-        transcription: transcript,
+        transcription: editedTranscript || transcript,
         reportContent: generatedReport,
         reportType,
         createdAt: new Date(),
@@ -212,12 +232,14 @@ export default function Dashboard() {
       <div className="min-h-screen bg-background">
         <Header />
         <main className="container max-w-4xl py-8">
-          <Card>
+          <Card className="border-destructive/50">
             <CardContent className="flex flex-col items-center gap-4 py-12">
-              <AlertCircle className="h-12 w-12 text-destructive" />
+              <div className="rounded-full bg-destructive/10 p-4">
+                <AlertCircle className="h-12 w-12 text-destructive" />
+              </div>
               <h2 className="text-xl font-semibold">Speech Recognition Not Supported</h2>
-              <p className="text-center text-muted-foreground">
-                Your browser doesn't support speech recognition. Please try using Chrome, Edge, or Safari.
+              <p className="text-center text-muted-foreground max-w-md">
+                Your browser doesn't support speech recognition. Please try using Chrome, Edge, or Safari for the best experience.
               </p>
             </CardContent>
           </Card>
@@ -240,18 +262,21 @@ export default function Dashboard() {
 
         <div className="space-y-6">
           {/* Recording Section */}
-          <Card>
-            <CardHeader>
+          <Card className="overflow-hidden">
+            <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>Recording</CardTitle>
                   <CardDescription>
-                    {isListening ? 'Listening...' : 'Click to start recording'}
+                    {isListening ? 'Listening to your voice...' : 'Click the microphone to start recording'}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <div className="text-2xl font-mono font-bold tabular-nums">
+                    <div className={cn(
+                      "text-2xl font-mono font-bold tabular-nums",
+                      isListening && "text-recording"
+                    )}>
                       {formatDuration(recordingDuration)}
                     </div>
                     <div className="text-xs text-muted-foreground">
@@ -269,16 +294,17 @@ export default function Dashboard() {
                   <Button
                     size="lg"
                     onClick={handleStartRecording}
-                    className="h-16 w-16 rounded-full bg-recording hover:bg-recording/90"
+                    className="h-16 w-16 rounded-full bg-gradient-to-br from-recording to-recording/80 hover:from-recording/90 hover:to-recording/70 shadow-lg shadow-recording/25 transition-all hover:scale-105"
                   >
-                    <Mic className="h-6 w-6" />
+                    <Mic className="h-7 w-7" />
                   </Button>
                 ) : (
                   <Button
                     size="lg"
                     onClick={handleStopRecording}
                     className={cn(
-                      'h-16 w-16 rounded-full bg-recording hover:bg-recording/90',
+                      'h-16 w-16 rounded-full bg-gradient-to-br from-recording to-recording/80',
+                      'shadow-lg shadow-recording/25',
                       'animate-pulse-recording'
                     )}
                   >
@@ -286,12 +312,12 @@ export default function Dashboard() {
                   </Button>
                 )}
                 
-                {(transcript || interimTranscript) && !isListening && (
+                {(transcript || interimTranscript || editedTranscript) && !isListening && (
                   <Button
                     size="lg"
                     variant="outline"
                     onClick={handleReset}
-                    className="h-16 w-16 rounded-full"
+                    className="h-16 w-16 rounded-full transition-all hover:scale-105"
                   >
                     <RotateCcw className="h-6 w-6" />
                   </Button>
@@ -304,18 +330,62 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Transcription Display */}
-          {(transcript || interimTranscript) && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Live Transcription</CardTitle>
+          {/* Transcription Display / Editor */}
+          {(transcript || interimTranscript || editedTranscript) && !isListening && (
+            isEditingTranscription ? (
+              <TranscriptionEditor
+                transcription={editedTranscript || transcript}
+                onSave={handleSaveTranscriptionEdit}
+                onCancel={() => setIsEditingTranscription(false)}
+              />
+            ) : (
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Transcription</CardTitle>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsEditingTranscription(true)}
+                      className="gap-2"
+                    >
+                      <Edit className="h-4 w-4" />
+                      Edit
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-40 rounded-lg border bg-secondary/30 p-4">
+                    <p className="whitespace-pre-wrap">
+                      {editedTranscript || transcript}
+                      {interimTranscript && (
+                        <span className="text-muted-foreground">{interimTranscript}</span>
+                      )}
+                    </p>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            )
+          )}
+
+          {/* Live transcription during recording */}
+          {isListening && (transcript || interimTranscript) && (
+            <Card className="border-recording/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-recording opacity-75"></span>
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-recording"></span>
+                  </span>
+                  Live Transcription
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-40 rounded-md border p-4">
+                <ScrollArea className="h-40 rounded-lg border bg-secondary/30 p-4">
                   <p className="whitespace-pre-wrap">
                     {transcript}
                     {interimTranscript && (
-                      <span className="text-muted-foreground">{interimTranscript}</span>
+                      <span className="text-muted-foreground italic">{interimTranscript}</span>
                     )}
                   </p>
                 </ScrollArea>
@@ -324,7 +394,7 @@ export default function Dashboard() {
           )}
 
           {/* Report Type Selection */}
-          {transcript && !isListening && (
+          {(transcript || editedTranscript) && !isListening && !isEditingTranscription && (
             <Card>
               <CardHeader>
                 <CardTitle>Report Format</CardTitle>
@@ -339,18 +409,18 @@ export default function Dashboard() {
                 <Button
                   onClick={generateReport}
                   disabled={isGenerating}
-                  className="w-full gap-2"
+                  className="w-full gap-2 h-12 text-base btn-glow"
                   size="lg"
                 >
                   {isGenerating ? (
                     <>
                       <Loader2 className="h-5 w-5 animate-spin" />
-                      Generating...
+                      Generating Report...
                     </>
                   ) : (
                     <>
                       <Sparkles className="h-5 w-5" />
-                      Generate Report
+                      Generate AI Report
                     </>
                   )}
                 </Button>
@@ -360,19 +430,24 @@ export default function Dashboard() {
 
           {/* Generated Report */}
           {generatedReport && (
-            <Card>
+            <Card className="border-primary/30">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Generated Report</CardTitle>
-                  <Button onClick={handleSaveReport} className="gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-lg bg-primary/10 p-2">
+                      <Sparkles className="h-5 w-5 text-primary" />
+                    </div>
+                    <CardTitle>Generated Report</CardTitle>
+                  </div>
+                  <Button onClick={handleSaveReport} className="gap-2 btn-glow">
                     <Save className="h-4 w-4" />
                     Save Report
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-80 rounded-md border p-4">
-                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                <ScrollArea className="h-80 rounded-lg border bg-secondary/30 p-4">
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap dark:prose-invert">
                     {generatedReport}
                   </div>
                 </ScrollArea>

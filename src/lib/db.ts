@@ -13,6 +13,14 @@ export interface Report {
   wordCount: number;
 }
 
+export interface Template {
+  id: string;
+  name: string;
+  content: string;
+  category: string;
+  createdAt: Date;
+}
+
 interface MediVoiceDB extends DBSchema {
   reports: {
     key: string;
@@ -29,10 +37,17 @@ interface MediVoiceDB extends DBSchema {
       value: unknown;
     };
   };
+  templates: {
+    key: string;
+    value: Template;
+    indexes: {
+      'by-category': string;
+    };
+  };
 }
 
 const DB_NAME = 'medivoice-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbInstance: IDBPDatabase<MediVoiceDB> | null = null;
 
@@ -40,7 +55,7 @@ export async function getDB(): Promise<IDBPDatabase<MediVoiceDB>> {
   if (dbInstance) return dbInstance;
   
   dbInstance = await openDB<MediVoiceDB>(DB_NAME, DB_VERSION, {
-    upgrade(db) {
+    upgrade(db, oldVersion) {
       // Reports store
       if (!db.objectStoreNames.contains('reports')) {
         const reportsStore = db.createObjectStore('reports', { keyPath: 'id' });
@@ -51,6 +66,12 @@ export async function getDB(): Promise<IDBPDatabase<MediVoiceDB>> {
       // Settings store
       if (!db.objectStoreNames.contains('settings')) {
         db.createObjectStore('settings', { keyPath: 'key' });
+      }
+
+      // Templates store (new in version 2)
+      if (!db.objectStoreNames.contains('templates')) {
+        const templatesStore = db.createObjectStore('templates', { keyPath: 'id' });
+        templatesStore.createIndex('by-category', 'category');
       }
     },
   });
@@ -105,6 +126,28 @@ export async function searchReports(query: string): Promise<Report[]> {
 export async function clearAllReports(): Promise<void> {
   const db = await getDB();
   await db.clear('reports');
+}
+
+// Template operations
+export async function saveTemplate(template: Template): Promise<void> {
+  const db = await getDB();
+  await db.put('templates', template);
+}
+
+export async function getAllTemplates(): Promise<Template[]> {
+  const db = await getDB();
+  const templates = await db.getAll('templates');
+  return templates.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete('templates', id);
+}
+
+export async function clearAllTemplates(): Promise<void> {
+  const db = await getDB();
+  await db.clear('templates');
 }
 
 // Settings operations
