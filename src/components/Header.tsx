@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { 
   Mic, 
   History, 
@@ -21,13 +22,13 @@ export function Header() {
   ];
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-card/80 backdrop-blur-sm">
+    <header className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
       <div className="container flex h-16 items-center justify-between px-4">
         <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent shadow-md">
             <Activity className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="text-lg font-semibold">MediVoice</span>
+          <span className="text-lg font-bold">MediVoice</span>
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
@@ -37,8 +38,8 @@ export function Header() {
                 variant="ghost"
                 size="sm"
                 className={cn(
-                  'gap-2',
-                  location.pathname === item.path && 'bg-secondary'
+                  'gap-2 transition-all',
+                  location.pathname === item.path && 'bg-secondary text-foreground'
                 )}
               >
                 <item.icon className="h-4 w-4" />
@@ -48,7 +49,8 @@ export function Header() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
           {user && (
             <>
               <span className="hidden text-sm text-muted-foreground md:block">
@@ -75,7 +77,7 @@ export function Header() {
             key={item.path}
             to={item.path}
             className={cn(
-              'flex flex-1 flex-col items-center gap-1 py-2 text-xs',
+              'flex flex-1 flex-col items-center gap-1 py-2 text-xs transition-colors',
               location.pathname === item.path
                 ? 'text-primary'
                 : 'text-muted-foreground'
