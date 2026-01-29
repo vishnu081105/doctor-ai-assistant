@@ -165,7 +165,9 @@ export default function Dashboard() {
             const parsed = JSON.parse(jsonStr);
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) {
-              reportText += content;
+              // Remove any asterisks from the content
+              const cleanContent = content.replace(/\*+/g, '');
+              reportText += cleanContent;
               setGeneratedReport(reportText);
             }
           } catch {

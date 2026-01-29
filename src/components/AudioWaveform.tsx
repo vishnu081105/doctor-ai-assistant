@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Mic, MicOff } from 'lucide-react';
+import { Mic } from 'lucide-react';
 
 interface AudioWaveformProps {
   isRecording: boolean;
@@ -46,8 +46,8 @@ export function AudioWaveform({ isRecording }: AudioWaveformProps) {
         const analyser = audioContext.createAnalyser();
         const source = audioContext.createMediaStreamSource(stream);
         
-        analyser.fftSize = 256;
-        analyser.smoothingTimeConstant = 0.7;
+        analyser.fftSize = 128;
+        analyser.smoothingTimeConstant = 0.8;
         source.connect(analyser);
         analyserRef.current = analyser;
 
@@ -66,56 +66,85 @@ export function AudioWaveform({ isRecording }: AudioWaveformProps) {
           animationRef.current = requestAnimationFrame(draw);
           analyser.getByteFrequencyData(dataArray);
 
-          // Clear with gradient background
-          const bgGradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
-          bgGradient.addColorStop(0, 'hsl(220, 20%, 13%)');
-          bgGradient.addColorStop(0.5, 'hsl(220, 25%, 15%)');
-          bgGradient.addColorStop(1, 'hsl(220, 20%, 13%)');
-          ctx.fillStyle = bgGradient;
+          // Clear canvas with dark background
+          ctx.fillStyle = 'hsl(var(--card))';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+          const centerX = canvas.width / 2;
           const centerY = canvas.height / 2;
-          const barCount = 64;
-          const barWidth = canvas.width / barCount * 0.6;
-          const gap = canvas.width / barCount * 0.4;
+          const radius = Math.min(centerX, centerY) * 0.6;
+          
+          // Calculate average volume
+          const average = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
+          const normalizedAvg = average / 255;
 
+          // Draw outer pulsing ring
+          const pulseRadius = radius + 20 + normalizedAvg * 30;
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, pulseRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = `hsla(0, 85%, 55%, ${0.2 + normalizedAvg * 0.3})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Draw middle ring
+          const middleRadius = radius + 10 + normalizedAvg * 15;
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, middleRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = `hsla(0, 85%, 55%, ${0.3 + normalizedAvg * 0.4})`;
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          // Draw circular waveform bars
+          const barCount = 32;
           for (let i = 0; i < barCount; i++) {
             const dataIndex = Math.floor(i * bufferLength / barCount);
             const value = dataArray[dataIndex] / 255;
-            const barHeight = Math.max(4, value * canvas.height * 0.4);
+            const barHeight = 8 + value * 40;
             
-            const x = i * (barWidth + gap) + gap / 2;
+            const angle = (i / barCount) * Math.PI * 2 - Math.PI / 2;
+            const innerRadius = radius - 5;
+            const outerRadius = radius + barHeight;
             
-            // Create gradient for bars
-            const gradient = ctx.createLinearGradient(x, centerY - barHeight, x, centerY + barHeight);
-            const intensity = value > 0.5 ? 1 : value * 2;
-            gradient.addColorStop(0, `hsla(0, 85%, ${50 + intensity * 15}%, ${0.3 + intensity * 0.7})`);
-            gradient.addColorStop(0.5, `hsla(0, 90%, ${55 + intensity * 20}%, 1)`);
-            gradient.addColorStop(1, `hsla(0, 85%, ${50 + intensity * 15}%, ${0.3 + intensity * 0.7})`);
-            
-            ctx.fillStyle = gradient;
-            
-            // Draw rounded bars mirrored from center
-            ctx.beginPath();
-            ctx.roundRect(x, centerY - barHeight, barWidth, barHeight * 2, barWidth / 2);
-            ctx.fill();
+            const x1 = centerX + Math.cos(angle) * innerRadius;
+            const y1 = centerY + Math.sin(angle) * innerRadius;
+            const x2 = centerX + Math.cos(angle) * outerRadius;
+            const y2 = centerY + Math.sin(angle) * outerRadius;
 
-            // Add glow effect for active bars
-            if (value > 0.3) {
-              ctx.shadowColor = 'hsl(0, 85%, 55%)';
-              ctx.shadowBlur = 10 * value;
-              ctx.fill();
-              ctx.shadowBlur = 0;
-            }
+            // Create gradient for each bar
+            const gradient = ctx.createLinearGradient(x1, y1, x2, y2);
+            gradient.addColorStop(0, `hsla(0, 85%, 55%, 0.8)`);
+            gradient.addColorStop(1, `hsla(0, 85%, 65%, ${0.4 + value * 0.6})`);
+
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.strokeStyle = gradient;
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.stroke();
           }
 
-          // Draw center line
-          ctx.strokeStyle = 'hsla(0, 0%, 100%, 0.1)';
-          ctx.lineWidth = 1;
+          // Draw center circle with mic icon background
+          const centerRadius = radius * 0.5 + normalizedAvg * 5;
+          const centerGradient = ctx.createRadialGradient(
+            centerX, centerY, 0,
+            centerX, centerY, centerRadius
+          );
+          centerGradient.addColorStop(0, 'hsla(0, 85%, 55%, 0.9)');
+          centerGradient.addColorStop(0.7, 'hsla(0, 85%, 45%, 0.8)');
+          centerGradient.addColorStop(1, 'hsla(0, 85%, 35%, 0.6)');
+          
           ctx.beginPath();
-          ctx.moveTo(0, centerY);
-          ctx.lineTo(canvas.width, centerY);
-          ctx.stroke();
+          ctx.arc(centerX, centerY, centerRadius, 0, Math.PI * 2);
+          ctx.fillStyle = centerGradient;
+          ctx.fill();
+
+          // Draw mic icon in center
+          ctx.fillStyle = 'white';
+          ctx.font = 'bold 24px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🎙️', centerX, centerY);
         };
 
         draw();
@@ -137,27 +166,60 @@ export function AudioWaveform({ isRecording }: AudioWaveformProps) {
   }, [isRecording]);
 
   const drawIdleWaveform = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-    const bgGradient = ctx.createLinearGradient(0, 0, width, 0);
-    bgGradient.addColorStop(0, 'hsl(220, 20%, 10%)');
-    bgGradient.addColorStop(0.5, 'hsl(220, 25%, 12%)');
-    bgGradient.addColorStop(1, 'hsl(220, 20%, 10%)');
-    ctx.fillStyle = bgGradient;
+    ctx.fillStyle = 'hsl(var(--card))';
     ctx.fillRect(0, 0, width, height);
 
+    const centerX = width / 2;
     const centerY = height / 2;
-    const barCount = 64;
-    const barWidth = width / barCount * 0.6;
-    const gap = width / barCount * 0.4;
+    const radius = Math.min(centerX, centerY) * 0.6;
 
+    // Draw static outer ring
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius + 20, 0, Math.PI * 2);
+    ctx.strokeStyle = 'hsla(var(--primary), 0.15)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Draw static middle ring
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius + 10, 0, Math.PI * 2);
+    ctx.strokeStyle = 'hsla(var(--primary), 0.2)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Draw static bars
+    const barCount = 32;
     for (let i = 0; i < barCount; i++) {
-      const x = i * (barWidth + gap) + gap / 2;
-      const barHeight = 4;
+      const angle = (i / barCount) * Math.PI * 2 - Math.PI / 2;
+      const innerRadius = radius - 5;
+      const outerRadius = radius + 8;
       
-      ctx.fillStyle = 'hsla(210, 50%, 50%, 0.3)';
+      const x1 = centerX + Math.cos(angle) * innerRadius;
+      const y1 = centerY + Math.sin(angle) * innerRadius;
+      const x2 = centerX + Math.cos(angle) * outerRadius;
+      const y2 = centerY + Math.sin(angle) * outerRadius;
+
       ctx.beginPath();
-      ctx.roundRect(x, centerY - barHeight, barWidth, barHeight * 2, barWidth / 2);
-      ctx.fill();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = 'hsla(var(--primary), 0.3)';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.stroke();
     }
+
+    // Draw center circle
+    const centerGradient = ctx.createRadialGradient(
+      centerX, centerY, 0,
+      centerX, centerY, radius * 0.5
+    );
+    centerGradient.addColorStop(0, 'hsla(var(--primary), 0.3)');
+    centerGradient.addColorStop(1, 'hsla(var(--primary), 0.1)');
+    
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius * 0.5, 0, Math.PI * 2);
+    ctx.fillStyle = centerGradient;
+    ctx.fill();
   };
 
   useEffect(() => {
@@ -171,31 +233,31 @@ export function AudioWaveform({ isRecording }: AudioWaveformProps) {
   }, [isRecording]);
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-card to-secondary/30 p-1 shadow-lg">
-      <div className="relative h-32 w-full overflow-hidden rounded-xl">
+    <div className="relative overflow-hidden rounded-2xl bg-card p-1 shadow-lg border border-border/50">
+      <div className="relative h-48 w-full overflow-hidden rounded-xl bg-card">
         <canvas
           ref={canvasRef}
-          width={800}
-          height={128}
+          width={400}
+          height={192}
           className="h-full w-full"
         />
         
         {/* Recording indicator */}
         {isRecording && (
-          <div className="absolute left-4 top-4 flex items-center gap-2">
-            <span className="relative flex h-3 w-3">
+          <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-recording/20 px-3 py-1">
+            <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-recording opacity-75"></span>
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-recording"></span>
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-recording"></span>
             </span>
-            <span className="text-xs font-medium text-recording">RECORDING</span>
+            <span className="text-xs font-semibold text-recording">REC</span>
           </div>
         )}
 
-        {/* Center icon */}
+        {/* Center mic icon when idle */}
         {!isRecording && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="rounded-full bg-primary/10 p-4">
-              <Mic className="h-8 w-8 text-primary/50" />
+            <div className="rounded-full bg-primary/10 p-6 backdrop-blur-sm">
+              <Mic className="h-10 w-10 text-primary" />
             </div>
           </div>
         )}
