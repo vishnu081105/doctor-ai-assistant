@@ -10,9 +10,11 @@ const reportPrompts: Record<string, string> = {
 
 CRITICAL FORMATTING RULES:
 - All section headings MUST be plain text only
-- DO NOT surround headings with ** or any markdown symbols
+- DO NOT use asterisks (*) anywhere in the output
+- DO NOT use markdown formatting like ** or * or # 
+- DO NOT surround headings with any symbols
 - DO NOT use bold, italic, or any formatting on heading lines
-- Content under headings may use bullets where appropriate
+- Content under headings may use simple dashes (-) for bullet points
 - If information is missing, state "Information not provided"
 - Maintain professional, ADA-compliant clinical language
 
@@ -32,15 +34,17 @@ SUMMARY / DIAGNOSIS
 
 RECOMMENDATION
 
-Format the output cleanly with proper medical terminology. Be concise but thorough.`,
+Format the output cleanly with proper medical terminology. Be concise but thorough. Never use asterisks.`,
 
   soap: `You are an expert medical transcription assistant. Convert the following medical dictation into a properly formatted SOAP Note.
 
 CRITICAL FORMATTING RULES:
 - All section headings MUST be plain text only
-- DO NOT surround headings with ** or any markdown symbols
+- DO NOT use asterisks (*) anywhere in the output
+- DO NOT use markdown formatting like ** or * or #
+- DO NOT surround headings with any symbols
 - DO NOT use bold, italic, or any formatting on heading lines
-- Content under headings may use bullets where appropriate
+- Content under headings may use simple dashes (-) for bullet points
 - If information is missing, state "Information not provided"
 - Maintain professional, ADA-compliant clinical language
 
@@ -63,17 +67,19 @@ P (Plan)
 Treatment plan, medications, follow-up instructions
 
 RECOMMENDATION
-Content may use bullets here
+Content may use dashes here for bullets
 
-Be precise and use standard medical terminology.`,
+Be precise and use standard medical terminology. Never use asterisks.`,
 
   diagnostic: `You are an expert medical transcription assistant. Convert the following medical dictation into a focused Surgical Pathology / Diagnostic Report.
 
 CRITICAL FORMATTING RULES:
 - All section headings MUST be plain text only
-- DO NOT surround headings with ** or any markdown symbols
+- DO NOT use asterisks (*) anywhere in the output
+- DO NOT use markdown formatting like ** or * or #
+- DO NOT surround headings with any symbols
 - DO NOT use bold, italic, or any formatting on heading lines
-- Content under headings may use bullets where appropriate
+- Content under headings may use simple dashes (-) for bullet points
 - If information is missing, state "Information not provided"
 - Maintain professional, ADA-compliant clinical language
 
@@ -93,8 +99,13 @@ SUMMARY / DIAGNOSIS
 
 RECOMMENDATION
 
-Focus on diagnostic findings and conclusions. Use precise medical terminology.`,
+Focus on diagnostic findings and conclusions. Use precise medical terminology. Never use asterisks.`,
 };
+
+// Function to clean any remaining asterisks from the response
+function cleanAsterisks(text: string): string {
+  return text.replace(/\*+/g, '');
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -130,7 +141,7 @@ serve(async (req) => {
           { role: "system", content: systemPrompt },
           { 
             role: "user", 
-            content: `Please convert this medical dictation into a ${reportType} report:\n\n${transcription}` 
+            content: `Please convert this medical dictation into a ${reportType} report. Remember: NO asterisks or markdown formatting allowed:\n\n${transcription}` 
           },
         ],
         stream: true,
