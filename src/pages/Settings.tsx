@@ -4,18 +4,25 @@ import { TemplateManager } from '@/components/TemplateManager';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Slider } from '@/components/ui/slider';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Separator } from '@/components/ui/separator';
 import { getSetting, setSetting, clearAllReports, clearAllSettings, clearAllTemplates, ReportType } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, Languages, FileText, Clock, Moon, Sun, Monitor, Bookmark } from 'lucide-react';
+import { Trash2, Languages, FileText, Clock, Moon, Sun, Monitor, Bookmark, User, Building2, Type } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
 export default function Settings() {
   const [defaultReportType, setDefaultReportType] = useState<ReportType>('general');
   const [language, setLanguage] = useState('en-US');
   const [showTimestamps, setShowTimestamps] = useState(true);
+  const [fontSize, setFontSize] = useState(14);
+  const [doctorName, setDoctorName] = useState('');
+  const [clinicName, setClinicName] = useState('');
+  const [autoSave, setAutoSave] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
@@ -25,10 +32,18 @@ export default function Settings() {
       const savedReportType = await getSetting<ReportType>('defaultReportType');
       const savedLanguage = await getSetting<string>('language');
       const savedTimestamps = await getSetting<boolean>('showTimestamps');
+      const savedFontSize = await getSetting<number>('fontSize');
+      const savedDoctorName = await getSetting<string>('doctorName');
+      const savedClinicName = await getSetting<string>('clinicName');
+      const savedAutoSave = await getSetting<boolean>('autoSave');
       
       if (savedReportType) setDefaultReportType(savedReportType);
       if (savedLanguage) setLanguage(savedLanguage);
       if (savedTimestamps !== undefined) setShowTimestamps(savedTimestamps);
+      if (savedFontSize) setFontSize(savedFontSize);
+      if (savedDoctorName) setDoctorName(savedDoctorName);
+      if (savedClinicName) setClinicName(savedClinicName);
+      if (savedAutoSave !== undefined) setAutoSave(savedAutoSave);
     };
     
     loadSettings();
@@ -52,6 +67,28 @@ export default function Settings() {
     toast({ title: 'Settings saved' });
   };
 
+  const handleFontSizeChange = async (value: number[]) => {
+    const size = value[0];
+    setFontSize(size);
+    await setSetting('fontSize', size);
+  };
+
+  const handleDoctorNameChange = async (value: string) => {
+    setDoctorName(value);
+    await setSetting('doctorName', value);
+  };
+
+  const handleClinicNameChange = async (value: string) => {
+    setClinicName(value);
+    await setSetting('clinicName', value);
+  };
+
+  const handleAutoSaveChange = async (value: boolean) => {
+    setAutoSave(value);
+    await setSetting('autoSave', value);
+    toast({ title: 'Settings saved' });
+  };
+
   const handleClearAllData = async () => {
     setIsClearing(true);
     try {
@@ -66,6 +103,10 @@ export default function Settings() {
       setDefaultReportType('general');
       setLanguage('en-US');
       setShowTimestamps(true);
+      setFontSize(14);
+      setDoctorName('');
+      setClinicName('');
+      setAutoSave(true);
     } catch (err) {
       toast({
         variant: 'destructive',
@@ -135,6 +176,44 @@ export default function Settings() {
             </CardContent>
           </Card>
 
+          {/* Profile Settings */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                  <User className="h-5 w-5" />
+                </div>
+                <div>
+                  <CardTitle>Profile Information</CardTitle>
+                  <CardDescription>Your professional details for reports</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="doctorName">Doctor Name</Label>
+                <Input
+                  id="doctorName"
+                  placeholder="Dr. John Smith"
+                  value={doctorName}
+                  onChange={(e) => handleDoctorNameChange(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="clinicName">Clinic / Hospital Name</Label>
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="clinicName"
+                    placeholder="City Medical Center"
+                    value={clinicName}
+                    onChange={(e) => handleClinicNameChange(e.target.value)}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Report Settings */}
           <Card>
             <CardHeader>
@@ -161,6 +240,19 @@ export default function Settings() {
                     <SelectItem value="diagnostic">Surgical Pathology Report</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Auto-Save Reports</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Automatically save reports after generation
+                  </p>
+                </div>
+                <Switch
+                  checked={autoSave}
+                  onCheckedChange={handleAutoSaveChange}
+                />
               </div>
             </CardContent>
           </Card>
@@ -220,7 +312,7 @@ export default function Settings() {
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                  <Clock className="h-5 w-5" />
+                  <Type className="h-5 w-5" />
                 </div>
                 <div>
                   <CardTitle>Display</CardTitle>
@@ -228,7 +320,7 @@ export default function Settings() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
                   <Label htmlFor="timestamps">Show Timestamps</Label>
@@ -241,6 +333,24 @@ export default function Settings() {
                   checked={showTimestamps}
                   onCheckedChange={handleTimestampsChange}
                 />
+              </div>
+              <Separator />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Font Size</Label>
+                  <span className="text-sm font-medium tabular-nums">{fontSize}px</span>
+                </div>
+                <Slider
+                  value={[fontSize]}
+                  onValueChange={handleFontSizeChange}
+                  min={12}
+                  max={20}
+                  step={1}
+                  className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Adjust text size for transcriptions and reports
+                </p>
               </div>
             </CardContent>
           </Card>
