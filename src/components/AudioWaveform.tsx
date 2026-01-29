@@ -24,8 +24,6 @@ export function AudioWaveform({ isRecording }: AudioWaveformProps) {
         audioContextRef.current.close();
         audioContextRef.current = null;
       }
-      
-      // Draw idle state
       const canvas = canvasRef.current;
       if (canvas) {
         const ctx = canvas.getContext('2d');
@@ -55,7 +53,10 @@ export function AudioWaveform({ isRecording }: AudioWaveformProps) {
         if (!canvas) return;
 
         const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        if (!ctx) {
+          console.error('Failed to get canvas context');
+          return;
+        }
 
         const bufferLength = analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
@@ -67,7 +68,7 @@ export function AudioWaveform({ isRecording }: AudioWaveformProps) {
           analyser.getByteFrequencyData(dataArray);
 
           // Clear canvas with dark background
-          ctx.fillStyle = 'hsl(var(--card))';
+          ctx.fillStyle = '#1a1a2e';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
 
           const centerX = canvas.width / 2;
@@ -150,6 +151,8 @@ export function AudioWaveform({ isRecording }: AudioWaveformProps) {
         draw();
       } catch (err) {
         console.error('Failed to access microphone:', err);
+        const error = err instanceof Error ? err.message : 'Failed to access microphone';
+        console.warn('Microphone error:', error);
       }
     };
 
@@ -166,7 +169,7 @@ export function AudioWaveform({ isRecording }: AudioWaveformProps) {
   }, [isRecording]);
 
   const drawIdleWaveform = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-    ctx.fillStyle = 'hsl(var(--card))';
+    ctx.fillStyle = 'hsl(220, 20%, 13%)';
     ctx.fillRect(0, 0, width, height);
 
     const centerX = width / 2;
@@ -176,14 +179,14 @@ export function AudioWaveform({ isRecording }: AudioWaveformProps) {
     // Draw static outer ring
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius + 20, 0, Math.PI * 2);
-    ctx.strokeStyle = 'hsla(var(--primary), 0.15)';
+    ctx.strokeStyle = 'hsla(210, 85%, 50%, 0.15)';
     ctx.lineWidth = 2;
     ctx.stroke();
 
     // Draw static middle ring
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius + 10, 0, Math.PI * 2);
-    ctx.strokeStyle = 'hsla(var(--primary), 0.2)';
+    ctx.strokeStyle = 'hsla(210, 85%, 50%, 0.2)';
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -202,7 +205,7 @@ export function AudioWaveform({ isRecording }: AudioWaveformProps) {
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
-      ctx.strokeStyle = 'hsla(var(--primary), 0.3)';
+      ctx.strokeStyle = 'hsla(210, 85%, 50%, 0.3)';
       ctx.lineWidth = 3;
       ctx.lineCap = 'round';
       ctx.stroke();
@@ -213,8 +216,8 @@ export function AudioWaveform({ isRecording }: AudioWaveformProps) {
       centerX, centerY, 0,
       centerX, centerY, radius * 0.5
     );
-    centerGradient.addColorStop(0, 'hsla(var(--primary), 0.3)');
-    centerGradient.addColorStop(1, 'hsla(var(--primary), 0.1)');
+    centerGradient.addColorStop(0, 'hsla(210, 85%, 50%, 0.3)');
+    centerGradient.addColorStop(1, 'hsla(210, 85%, 50%, 0.1)');
     
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius * 0.5, 0, Math.PI * 2);

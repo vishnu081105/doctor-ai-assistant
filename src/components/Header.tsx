@@ -31,8 +31,12 @@ export function Header() {
 
   useEffect(() => {
     const loadDoctorName = async () => {
-      const name = await getSetting<string>('doctorName');
-      if (name) setDoctorName(name);
+      try {
+        const name = await getSetting<string>('doctorName');
+        if (name) setDoctorName(name);
+      } catch (error) {
+        console.error('Failed to load doctor name:', error);
+      }
     };
     loadDoctorName();
   }, [location.pathname]);
