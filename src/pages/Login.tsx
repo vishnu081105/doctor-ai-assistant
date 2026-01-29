@@ -7,10 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Activity, Loader2, Mail, Lock, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { setSetting } from '@/lib/db';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [doctorName, setDoctorName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const { signIn, signUp, user } = useAuth();
@@ -28,23 +30,43 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const { error } = isSignUp
-        ? await signUp(email, password)
-        : await signIn(email, password);
+      if (isSignUp) {
+        // Validate doctor name for signup
+        if (!doctorName.trim()) {
+          toast({
+            variant: 'destructive',
+            title: 'Name required',
+            description: 'Please enter your name.',
+          });
+          setIsLoading(false);
+          return;
+        }
 
-      if (error) {
-        toast({
-          variant: 'destructive',
-          title: isSignUp ? 'Sign up failed' : 'Sign in failed',
-          description: error.message,
-        });
-      } else {
-        if (isSignUp) {
+        const { error } = await signUp(email, password);
+        if (error) {
+          toast({
+            variant: 'destructive',
+            title: 'Sign up failed',
+            description: error.message,
+          });
+        } else {
+          // Save doctor name to local storage
+          await setSetting('doctorName', doctorName);
           toast({
             title: 'Account created!',
             description: 'You can now sign in with your credentials.',
           });
           setIsSignUp(false);
+          setDoctorName('');
+        }
+      } else {
+        const { error } = await signIn(email, password);
+        if (error) {
+          toast({
+            variant: 'destructive',
+            title: 'Sign in failed',
+            description: error.message,
+          });
         } else {
           navigate('/');
         }
@@ -83,6 +105,24 @@ export default function Login() {
         </CardHeader>
         <CardContent className="pt-4">
           <form onSubmit={handleSubmit} className="space-y-5">
+            {isSignUp && (
+              <div className="space-y-2">
+                <Label htmlFor="doctorName" className="text-sm font-medium">Full Name</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="doctorName"
+                    type="text"
+                    placeholder="Dr. John Smith"
+                    value={doctorName}
+                    onChange={(e) => setDoctorName(e.target.value)}
+                    required={isSignUp}
+                    className="pl-10 h-11"
+                  />
+                </div>
+              </div>
+            )}
+            
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium">Email</Label>
               <div className="relative">
