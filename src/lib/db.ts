@@ -1,4 +1,4 @@
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { supabase } from '@/integrations/supabase/client';
 
 export type ReportType = 'general' | 'soap' | 'diagnostic';
 
@@ -23,153 +23,227 @@ export interface Template {
   createdAt: Date;
 }
 
-interface MediVoiceDB extends DBSchema {
-  reports: {
-    key: string;
-    value: Report;
-    indexes: {
-      'by-date': Date;
-      'by-type': ReportType;
-    };
-  };
-  settings: {
-    key: string;
-    value: {
-      key: string;
-      value: unknown;
-    };
-  };
-  templates: {
-    key: string;
-    value: Template;
-    indexes: {
-      'by-category': string;
-    };
-  };
+export interface Setting {
+  key: string;
+  value: unknown;
 }
 
-const DB_NAME = 'medivoice-db';
-const DB_VERSION = 2;
-
-let dbInstance: IDBPDatabase<MediVoiceDB> | null = null;
-
-export async function getDB(): Promise<IDBPDatabase<MediVoiceDB>> {
-  if (dbInstance) return dbInstance;
-  
-  dbInstance = await openDB<MediVoiceDB>(DB_NAME, DB_VERSION, {
-    upgrade(db, oldVersion) {
-      // Reports store
-      if (!db.objectStoreNames.contains('reports')) {
-        const reportsStore = db.createObjectStore('reports', { keyPath: 'id' });
-        reportsStore.createIndex('by-date', 'createdAt');
-        reportsStore.createIndex('by-type', 'reportType');
-      }
-      
-      // Settings store
-      if (!db.objectStoreNames.contains('settings')) {
-        db.createObjectStore('settings', { keyPath: 'key' });
-      }
-
-      // Templates store (new in version 2)
-      if (!db.objectStoreNames.contains('templates')) {
-        const templatesStore = db.createObjectStore('templates', { keyPath: 'id' });
-        templatesStore.createIndex('by-category', 'category');
-      }
-    },
-  });
-  
-  return dbInstance;
+// Helper function to get current user
+async function getCurrentUserId(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error('User not authenticated');
+  return session.user.id;
 }
 
 // Report operations
-export async function saveReport(report: Report): Promise<void> {
-  const db = await getDB();
-  await db.put('reports', report);
-}
-
-export async function getReport(id: string): Promise<Report | undefined> {
-  const db = await getDB();
-  return db.get('reports', id);
-}
-
-export async function getAllReports(): Promise<Report[]> {
-  const db = await getDB();
-  const reports = await db.getAll('reports');
-  return reports.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-}
-
-export async function deleteReport(id: string): Promise<void> {
-  const db = await getDB();
-  await db.delete('reports', id);
-}
-
-export async function updateReport(id: string, updates: Partial<Report>): Promise<void> {
-  const db = await getDB();
-  const existing = await db.get('reports', id);
-  if (existing) {
-    await db.put('reports', { ...existing, ...updates, updatedAt: new Date() });
+export async function saveReport(report: Omit<Report, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
+  const userId = await getCurrentUserId();
+  const { error } = await supabase
+    .from('reports')
+    .insert({
+      user_id: userId,
+      transcription: report.transcription,
+      report_content: report.reportContent,
+      report_type: report.reportType,
+      duration: report.duration,
+      word_count: report.wordCount,
+    });
+  if (error) {
+    console.error('Error saving report:', error);
+    throw new Error(`Failed to save report: ${error.message}`);
   }
 }
 
+export async function getReport(id: string): Promise<Report | undefined> {
+  const userId = await getCurrentUserId();
+  const { data, error } = await supabase
+    .from('reports')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .single();
+  if (error) {
+    if (error.code === 'PGRST116') return undefined; // Not found
+    throw error;
+  }
+  return {
+    id: data.id,
+    transcription: data.transcription,
+    reportContent: data.report_content,
+    reportType: data.report_type as ReportType,
+    createdAt: new Date(data.created_at),
+    updatedAt: new Date(data.updated_at),
+    duration: data.duration,
+    wordCount: data.word_count,
+  };
+}
+
+export async function getAllReports(): Promise<Report[]> {
+  const userId = await getCurrentUserId();
+  const { data, error } = await supabase
+    .from('reports')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data.map(row => ({
+    id: row.id,
+    transcription: row.transcription,
+    reportContent: row.report_content,
+    reportType: row.report_type as ReportType,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+    duration: row.duration,
+    wordCount: row.word_count,
+  }));
+}
+
+export async function deleteReport(id: string): Promise<void> {
+  const userId = await getCurrentUserId();
+  const { error } = await supabase
+    .from('reports')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
+export async function updateReport(id: string, updates: Partial<Omit<Report, 'id' | 'createdAt'>>): Promise<void> {
+  const userId = await getCurrentUserId();
+  const updateData: any = {};
+  if (updates.transcription !== undefined) updateData.transcription = updates.transcription;
+  if (updates.reportContent !== undefined) updateData.report_content = updates.reportContent;
+  if (updates.reportType !== undefined) updateData.report_type = updates.reportType;
+  if (updates.duration !== undefined) updateData.duration = updates.duration;
+  if (updates.wordCount !== undefined) updateData.word_count = updates.wordCount;
+  updateData.updated_at = new Date().toISOString();
+
+  const { error } = await supabase
+    .from('reports')
+    .update(updateData)
+    .eq('id', id)
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
 export async function searchReports(query: string): Promise<Report[]> {
-  const db = await getDB();
-  const allReports = await db.getAll('reports');
-  const lowercaseQuery = query.toLowerCase();
-  
-  return allReports
-    .filter(
-      (report) =>
-        report.transcription.toLowerCase().includes(lowercaseQuery) ||
-        report.reportContent.toLowerCase().includes(lowercaseQuery)
-    )
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const userId = await getCurrentUserId();
+  const { data, error } = await supabase
+    .from('reports')
+    .select('*')
+    .eq('user_id', userId)
+    .or(`transcription.ilike.%${query}%,report_content.ilike.%${query}%`)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data.map(row => ({
+    id: row.id,
+    transcription: row.transcription,
+    reportContent: row.report_content,
+    reportType: row.report_type as ReportType,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+    duration: row.duration,
+    wordCount: row.word_count,
+  }));
 }
 
 export async function clearAllReports(): Promise<void> {
-  const db = await getDB();
-  await db.clear('reports');
+  const userId = await getCurrentUserId();
+  const { error } = await supabase
+    .from('reports')
+    .delete()
+    .eq('user_id', userId);
+  if (error) throw error;
 }
 
 // Template operations
-export async function saveTemplate(template: Template): Promise<void> {
-  const db = await getDB();
-  await db.put('templates', template);
+export async function saveTemplate(template: Omit<Template, 'id' | 'createdAt'>): Promise<void> {
+  const userId = await getCurrentUserId();
+  const { error } = await supabase
+    .from('templates')
+    .insert({
+      user_id: userId,
+      name: template.name,
+      content: template.content,
+      category: template.category,
+    });
+  if (error) throw error;
 }
 
 export async function getAllTemplates(): Promise<Template[]> {
-  const db = await getDB();
-  const templates = await db.getAll('templates');
-  return templates.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const userId = await getCurrentUserId();
+  const { data, error } = await supabase
+    .from('templates')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data.map(row => ({
+    id: row.id,
+    name: row.name,
+    content: row.content,
+    category: row.category,
+    createdAt: new Date(row.created_at),
+  }));
 }
 
 export async function deleteTemplate(id: string): Promise<void> {
-  const db = await getDB();
-  await db.delete('templates', id);
+  const userId = await getCurrentUserId();
+  const { error } = await supabase
+    .from('templates')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', userId);
+  if (error) throw error;
 }
 
 export async function clearAllTemplates(): Promise<void> {
-  const db = await getDB();
-  await db.clear('templates');
+  const userId = await getCurrentUserId();
+  const { error } = await supabase
+    .from('templates')
+    .delete()
+    .eq('user_id', userId);
+  if (error) throw error;
 }
 
 // Settings operations
 export async function getSetting<T>(key: string): Promise<T | undefined> {
-  const db = await getDB();
-  const setting = await db.get('settings', key);
-  return setting?.value as T | undefined;
+  const userId = await getCurrentUserId();
+  const { data, error } = await supabase
+    .from('settings')
+    .select('value')
+    .eq('user_id', userId)
+    .eq('key', key)
+    .single();
+  if (error) {
+    if (error.code === 'PGRST116') return undefined; // Not found
+    throw error;
+  }
+  return data.value as T;
 }
 
 export async function setSetting<T>(key: string, value: T): Promise<void> {
-  const db = await getDB();
-  await db.put('settings', { key, value });
+  const userId = await getCurrentUserId();
+  const { error } = await supabase
+    .from('settings')
+    .upsert({
+      user_id: userId,
+      key,
+      value,
+    });
+  if (error) throw error;
 }
 
 export async function clearAllSettings(): Promise<void> {
-  const db = await getDB();
-  await db.clear('settings');
+  const userId = await getCurrentUserId();
+  const { error } = await supabase
+    .from('settings')
+    .delete()
+    .eq('user_id', userId);
+  if (error) throw error;
 }
 
-// Generate unique ID
+// Generate unique ID (still useful for client-side)
 export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }

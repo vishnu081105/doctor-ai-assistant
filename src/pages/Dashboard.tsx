@@ -135,13 +135,18 @@ export default function Dashboard() {
     }
 
     try {
+      // Check if Supabase URL is configured
+      if (!import.meta.env.VITE_SUPABASE_URL) {
+        throw new Error('Supabase is not configured. Please check your environment variables.');
+      }
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-report`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
           body: JSON.stringify({
             transcription: enhancedTranscription,
@@ -151,13 +156,19 @@ export default function Dashboard() {
       );
 
       if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('AI report generation service is not available. Please contact support or try again later.');
+        }
         if (response.status === 429) {
           throw new Error('Rate limit exceeded. Please try again later.');
         }
         if (response.status === 402) {
           throw new Error('AI usage limit reached. Please add credits to continue.');
         }
-        throw new Error('Failed to generate report');
+        if (response.status >= 500) {
+          throw new Error('Server error. Please try again later.');
+        }
+        throw new Error(`Failed to generate report (${response.status})`);
       }
 
       if (!response.body) {
@@ -204,10 +215,11 @@ export default function Dashboard() {
       }
     } catch (err) {
       console.error('Report generation error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate report';
       toast({
         variant: 'destructive',
         title: 'Generation failed',
-        description: err instanceof Error ? err.message : 'Failed to generate report',
+        description: errorMessage,
       });
     } finally {
       setIsGenerating(false);
@@ -226,12 +238,9 @@ export default function Dashboard() {
 
     try {
       const report = {
-        id: generateId(),
         transcription: editedTranscript || transcript,
         reportContent: generatedReport,
         reportType,
-        createdAt: new Date(),
-        updatedAt: new Date(),
         duration: recordingDuration,
         wordCount,
         patientId: patientId || undefined,

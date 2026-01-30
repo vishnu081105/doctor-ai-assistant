@@ -44,11 +44,9 @@ export function TemplateManager({ onInsertTemplate, mode = 'manage' }: TemplateM
     }
 
     const template: Template = {
-      id: generateId(),
       name: newName,
       content: newContent,
       category: newCategory || 'General',
-      createdAt: new Date(),
     };
 
     await saveTemplate(template);

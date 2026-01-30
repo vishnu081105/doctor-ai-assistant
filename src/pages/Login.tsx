@@ -50,11 +50,11 @@ export default function Login() {
             description: error.message,
           });
         } else {
-          // Save doctor name to local storage
-          await setSetting('doctorName', doctorName);
+          // Store doctor name temporarily for after login
+          localStorage.setItem('pendingDoctorName', doctorName);
           toast({
             title: 'Account created!',
-            description: 'You can now sign in with your credentials.',
+            description: 'Please check your email to confirm your account, then sign in.',
           });
           setIsSignUp(false);
           setDoctorName('');
@@ -62,12 +62,37 @@ export default function Login() {
       } else {
         const { error } = await signIn(email, password);
         if (error) {
+          console.error('Sign in error:', error);
+          let errorMessage = error.message;
+          
+          // Provide more helpful error messages
+          if (error.message.includes('Email not confirmed')) {
+            errorMessage = 'Please check your email and click the confirmation link before signing in.';
+          } else if (error.message.includes('Invalid login credentials')) {
+            errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+          }
+          
           toast({
             variant: 'destructive',
             title: 'Sign in failed',
-            description: error.message,
+            description: errorMessage,
           });
         } else {
+          console.log('Sign in successful, navigating to dashboard');
+          // Save pending doctor name if it exists - do this after a short delay to ensure session is established
+          const pendingDoctorName = localStorage.getItem('pendingDoctorName');
+          if (pendingDoctorName) {
+            setTimeout(async () => {
+              try {
+                await setSetting('doctorName', pendingDoctorName);
+                localStorage.removeItem('pendingDoctorName');
+                console.log('Doctor name saved successfully');
+              } catch (err) {
+                console.error('Failed to save doctor name:', err);
+                // Don't show error to user, just log it
+              }
+            }, 1000);
+          }
           navigate('/');
         }
       }
