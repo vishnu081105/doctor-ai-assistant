@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -11,13 +12,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { 
-  Mic, 
   History, 
   Settings, 
   LogOut,
-  Activity,
   User,
-  ChevronDown
+  Home,
+  FileText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
@@ -28,80 +28,114 @@ export function Header() {
   const location = useLocation();
   const navigate = useNavigate();
   const [doctorName, setDoctorName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
 
   useEffect(() => {
-    const loadDoctorName = async () => {
+    const loadProfile = async () => {
       try {
         const name = await getSetting<string>('doctorName');
+        const avatar = await getSetting<string>('avatarUrl');
         if (name) setDoctorName(name);
+        if (avatar) setAvatarUrl(avatar);
       } catch (error) {
-        console.error('Failed to load doctor name:', error);
+        console.error('Failed to load profile:', error);
       }
     };
-    loadDoctorName();
+    loadProfile();
   }, [location.pathname]);
-
-  const navItems = [
-    { path: '/', icon: Mic, label: 'Record' },
-    { path: '/history', icon: History, label: 'History' },
-    { path: '/settings', icon: Settings, label: 'Settings' },
-  ];
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/login');
   };
 
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const isActive = (path: string) => location.pathname === path;
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
       <div className="container flex h-16 items-center justify-between px-4">
+        {/* Logo */}
         <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent shadow-md">
-            <Activity className="h-5 w-5 text-primary-foreground" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80 shadow-md">
+            <FileText className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="text-lg font-bold">MediVoice</span>
+          <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
+            PSG Hospital
+          </span>
         </Link>
 
-        <nav className="hidden items-center gap-1 md:flex">
-          {navItems.map((item) => (
-            <Link key={item.path} to={item.path}>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  'gap-2 transition-all',
-                  location.pathname === item.path && 'bg-secondary text-foreground'
-                )}
-              >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-              </Button>
-            </Link>
-          ))}
-        </nav>
+        {/* Right side - Navigation + Profile grouped together */}
+        <div className="flex items-center gap-1">
+          {/* Navigation buttons */}
+          <Button
+            variant={isActive('/') ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => navigate('/')}
+            className={cn('gap-2', isActive('/') && 'bg-primary')}
+          >
+            <Home className="h-4 w-4" />
+            <span className="hidden sm:inline">Home</span>
+          </Button>
+          
+          <Button
+            variant={isActive('/history') ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => navigate('/history')}
+            className={cn('gap-2', isActive('/history') && 'bg-primary')}
+          >
+            <History className="h-4 w-4" />
+            <span className="hidden sm:inline">History</span>
+          </Button>
+          
+          <Button
+            variant={isActive('/settings') ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => navigate('/settings')}
+            className={cn('gap-2', isActive('/settings') && 'bg-primary')}
+          >
+            <Settings className="h-4 w-4" />
+            <span className="hidden sm:inline">Settings</span>
+          </Button>
 
-        <div className="flex items-center gap-2">
           <ThemeToggle />
+
+          {/* Profile dropdown */}
           {user && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10">
-                    <User className="h-4 w-4 text-primary" />
-                  </div>
-                  <span className="hidden md:inline text-sm font-medium">
-                    {doctorName || 'Profile'}
-                  </span>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                <Button variant="ghost" className="relative h-10 w-10 rounded-full p-0 ml-1">
+                  <Avatar className="h-10 w-10 border-2 border-primary/20">
+                    <AvatarImage src={avatarUrl} alt={doctorName || 'Doctor'} />
+                    <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                      {doctorName ? getInitials(doctorName) : <User className="h-5 w-5" />}
+                    </AvatarFallback>
+                  </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel>
-                  <div className="flex flex-col">
-                    <span>{doctorName || 'Doctor'}</span>
-                    <span className="text-xs font-normal text-muted-foreground truncate">
-                      {user.email}
-                    </span>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={avatarUrl} alt={doctorName || 'Doctor'} />
+                      <AvatarFallback className="bg-primary/10 text-primary">
+                        {doctorName ? getInitials(doctorName) : <User className="h-4 w-4" />}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">{doctorName || 'Doctor'}</p>
+                      <p className="text-xs leading-none text-muted-foreground truncate max-w-[140px]">
+                        {user.email}
+                      </p>
+                    </div>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -114,7 +148,7 @@ export function Header() {
                   Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
+                <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
                   Logout
                 </DropdownMenuItem>
@@ -123,25 +157,6 @@ export function Header() {
           )}
         </div>
       </div>
-
-      {/* Mobile nav */}
-      <nav className="flex border-t md:hidden">
-        {navItems.map((item) => (
-          <Link
-            key={item.path}
-            to={item.path}
-            className={cn(
-              'flex flex-1 flex-col items-center gap-1 py-2 text-xs transition-colors',
-              location.pathname === item.path
-                ? 'text-primary'
-                : 'text-muted-foreground'
-            )}
-          >
-            <item.icon className="h-5 w-5" />
-            {item.label}
-          </Link>
-        ))}
-      </nav>
     </header>
   );
 }

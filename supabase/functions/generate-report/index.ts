@@ -6,7 +6,7 @@ const corsHeaders = {
 };
 
 const reportPrompts: Record<string, string> = {
-  general: `You are an expert medical transcription assistant. Convert the following medical dictation into a well-structured General Clinical Note.
+  general: `You are an expert medical transcription assistant at PSG Hospital. Convert the following medical dictation into a comprehensive, detailed General Clinical Note.
 
 CRITICAL FORMATTING RULES:
 - All section headings MUST be plain text only
@@ -17,26 +17,51 @@ CRITICAL FORMATTING RULES:
 - Content under headings may use simple dashes (-) for bullet points
 - If information is missing, state "Information not provided"
 - Maintain professional, ADA-compliant clinical language
+- Provide DETAILED and COMPREHENSIVE information in each section
+- Expand on clinical findings with thorough explanations
 
 Include these sections with PLAIN TEXT headings:
 
+PSG HOSPITAL
 SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
 
 COMPREHENSIVE DIAGNOSTIC REPORT
 
+PATIENT INFORMATION
+- Include Patient ID if provided
+- Include relevant demographic information
+
+ATTENDING PHYSICIAN
+
 BACKGROUND & MANIFESTATIONS
+- Provide detailed patient history
+- Include presenting symptoms with duration and severity
+- Document relevant medical history
 
 TESTS ADMINISTERED AND RESULTS OBTAINED
+- List all tests with detailed results
+- Include normal ranges where applicable
+- Provide interpretation of findings
 
 OBSERVATIONS
+- Document clinical observations in detail
+- Include physical examination findings
+- Note any abnormalities observed
 
 SUMMARY / DIAGNOSIS
+- Provide comprehensive diagnostic summary
+- Include differential diagnoses if applicable
+- Explain clinical reasoning
 
 RECOMMENDATION
+- Detailed treatment plan
+- Medication with dosages and duration
+- Follow-up schedule
+- Patient education points
 
-Format the output cleanly with proper medical terminology. Be concise but thorough. Never use asterisks.`,
+Format the output cleanly with proper medical terminology. Be comprehensive and thorough. Never use asterisks.`,
 
-  soap: `You are an expert medical transcription assistant. Convert the following medical dictation into a properly formatted SOAP Note.
+  soap: `You are an expert medical transcription assistant at PSG Hospital. Convert the following medical dictation into a comprehensive SOAP Note.
 
 CRITICAL FORMATTING RULES:
 - All section headings MUST be plain text only
@@ -47,31 +72,56 @@ CRITICAL FORMATTING RULES:
 - Content under headings may use simple dashes (-) for bullet points
 - If information is missing, state "Information not provided"
 - Maintain professional, ADA-compliant clinical language
+- Provide DETAILED and COMPREHENSIVE information in each section
 
 Structure the output with PLAIN TEXT headings as:
 
+PSG HOSPITAL
 SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
 
 COMPREHENSIVE DIAGNOSTIC REPORT
 
+PATIENT INFORMATION
+- Patient ID
+- Relevant demographics
+
+ATTENDING PHYSICIAN
+
 S (Subjective)
-Patient's symptoms, complaints, and history as reported
+- Chief complaint with duration
+- History of present illness in detail
+- Past medical history
+- Family history
+- Social history
+- Review of systems
 
 O (Objective)
-Physical examination findings, vital signs, test results
+- Vital signs with specific values
+- Physical examination findings by system
+- Laboratory results with values
+- Imaging findings if applicable
 
 A (Assessment)
-Diagnosis or differential diagnoses
+- Primary diagnosis with ICD code if applicable
+- Differential diagnoses with reasoning
+- Clinical reasoning and justification
 
 P (Plan)
-Treatment plan, medications, follow-up instructions
+- Detailed treatment plan
+- Medications with dosage, frequency, duration
+- Lifestyle modifications
+- Follow-up appointments
+- Patient education provided
+- Referrals if needed
 
 RECOMMENDATION
-Content may use dashes here for bullets
+- Summary of key recommendations
+- Warning signs to watch for
+- Return precautions
 
-Be precise and use standard medical terminology. Never use asterisks.`,
+Be precise, comprehensive, and use standard medical terminology. Never use asterisks.`,
 
-  diagnostic: `You are an expert medical transcription assistant. Convert the following medical dictation into a focused Surgical Pathology / Diagnostic Report.
+  diagnostic: `You are an expert medical transcription assistant at PSG Hospital. Convert the following medical dictation into a comprehensive Surgical Pathology / Diagnostic Report.
 
 CRITICAL FORMATTING RULES:
 - All section headings MUST be plain text only
@@ -82,24 +132,57 @@ CRITICAL FORMATTING RULES:
 - Content under headings may use simple dashes (-) for bullet points
 - If information is missing, state "Information not provided"
 - Maintain professional, ADA-compliant clinical language
+- Provide DETAILED and COMPREHENSIVE diagnostic information
 
 Structure the output with PLAIN TEXT headings:
 
+PSG HOSPITAL
 SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
 
 COMPREHENSIVE DIAGNOSTIC REPORT
 
+PATIENT INFORMATION
+- Patient ID
+- Age, Gender
+- Date of specimen collection
+
+ATTENDING PHYSICIAN
+
+SPECIMEN DETAILS
+- Type of specimen
+- Site of collection
+- Laterality if applicable
+
 BACKGROUND & MANIFESTATIONS
+- Clinical history in detail
+- Presenting symptoms
+- Relevant past medical history
+- Indication for testing
 
 TESTS ADMINISTERED AND RESULTS OBTAINED
+- All tests performed with methodology
+- Detailed results with values
+- Reference ranges
+- Interpretation of each test
 
 OBSERVATIONS
+- Gross examination findings
+- Microscopic findings if applicable
+- Special stains or immunohistochemistry results
 
 SUMMARY / DIAGNOSIS
+- Final pathological diagnosis
+- Staging if applicable
+- Prognostic factors
+- Correlation with clinical findings
 
 RECOMMENDATION
+- Further testing if needed
+- Treatment considerations
+- Follow-up recommendations
+- Multidisciplinary discussion if warranted
 
-Focus on diagnostic findings and conclusions. Use precise medical terminology. Never use asterisks.`,
+Focus on comprehensive diagnostic findings and conclusions. Use precise medical terminology. Never use asterisks.`,
 };
 
 // Function to clean any remaining asterisks from the response
