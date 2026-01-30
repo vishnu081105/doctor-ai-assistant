@@ -187,30 +187,123 @@ Focus on comprehensive diagnostic findings and conclusions. Use precise medical 
 
 // Function to clean any remaining asterisks from the response
 function cleanAsterisks(text: string): string {
-  return text.replace(/\*+/g, '');
+  return text.replace(/\*+/g, '').replace(/\*\*/g, '').replace(/\#+/g, '');
+}
+
+// Function to validate report type
+function isValidReportType(type: string): type is keyof typeof reportPrompts {
+  return type in reportPrompts;
+}
+
+// Function to create a readable stream transformer for cleaning asterisks
+function createStreamTransformer() {
+  let buffer = '';
+
+  return new TransformStream({
+    transform(chunk, controller) {
+      const text = new TextDecoder().decode(chunk);
+      buffer += text;
+
+      // Process complete lines
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') {
+            controller.enqueue(new TextEncoder().encode(`${line}\n\n`));
+            continue;
+          }
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            if (parsed.choices?.[0]?.delta?.content) {
+              // Clean asterisks from the content
+              parsed.choices[0].delta.content = cleanAsterisks(parsed.choices[0].delta.content);
+            }
+            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(parsed)}\n\n`));
+          } catch (e) {
+            // If parsing fails, pass through unchanged
+            controller.enqueue(new TextEncoder().encode(`${line}\n\n`));
+          }
+        } else {
+          controller.enqueue(new TextEncoder().encode(`${line}\n\n`));
+        }
+      }
+    },
+
+    flush(controller) {
+      // Handle any remaining buffer
+      if (buffer) {
+        controller.enqueue(new TextEncoder().encode(`${buffer}\n\n`));
+      }
+    }
+  });
 }
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    const { transcription, reportType } = await req.json();
+  // Only allow POST requests
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
-    if (!transcription || !reportType) {
+  try {
+    const body = await req.json().catch(() => null);
+    
+    if (!body) {
       return new Response(
-        JSON.stringify({ error: "Missing transcription or reportType" }),
+        JSON.stringify({ error: "Invalid JSON body" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const { transcription, reportType } = body;
+
+    // Validate required fields
+    if (!transcription || typeof transcription !== 'string') {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid transcription field" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    const systemPrompt = reportPrompts[reportType] || reportPrompts.general;
+    if (!reportType || typeof reportType !== 'string') {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid reportType field" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate report type
+    if (!isValidReportType(reportType)) {
+      return new Response(
+        JSON.stringify({ error: `Invalid reportType. Supported types: ${Object.keys(reportPrompts).join(', ')}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Check for API key
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      console.error("LOVABLE_API_KEY environment variable is not set");
+      return new Response(
+        JSON.stringify({ error: "AI service configuration error" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const systemPrompt = reportPrompts[reportType];
+
+    console.log(`Generating ${reportType} report for transcription length: ${transcription.length}`);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -224,42 +317,69 @@ serve(async (req) => {
           { role: "system", content: systemPrompt },
           { 
             role: "user", 
-            content: `Please convert this medical dictation into a ${reportType} report. Remember: NO asterisks or markdown formatting allowed:\n\n${transcription}` 
+            content: `Please convert this medical dictation into a ${reportType} report. Remember: NO asterisks, NO markdown formatting, NO special characters for headings. Use plain text only:\n\n${transcription}` 
           },
         ],
         stream: true,
+        temperature: 0.1, // Lower temperature for more consistent medical reports
+        max_tokens: 4000, // Ensure sufficient length for comprehensive reports
       }),
     });
 
     if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error(`AI gateway error: ${response.status} - ${errorText}`);
+
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Rate limits exceeded, please try again later." }),
+          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+      
       if (response.status === 402) {
         return new Response(
-          JSON.stringify({ error: "Payment required, please add funds to your workspace." }),
+          JSON.stringify({ error: "AI service quota exceeded. Please check your account limits." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+
+      if (response.status >= 500) {
+        return new Response(
+          JSON.stringify({ error: "AI service temporarily unavailable. Please try again later." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       return new Response(
-        JSON.stringify({ error: "AI gateway error" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: `AI service error: ${response.status}` }),
+        { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+    // Transform the stream to clean asterisks
+    const transformedStream = response.body?.pipeThrough(createStreamTransformer());
+
+    return new Response(transformedStream, {
+      headers: { 
+        ...corsHeaders, 
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
     });
+
   } catch (e) {
-    console.error("generate-report error:", e);
+    console.error("generate-report function error:", e);
+    
+    const errorMessage = e instanceof Error ? e.message : "Unknown error occurred";
+    
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: `Internal server error: ${errorMessage}` }),
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      }
     );
   }
 });
