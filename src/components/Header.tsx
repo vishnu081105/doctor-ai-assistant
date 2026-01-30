@@ -69,7 +69,7 @@ export function Header() {
             <FileText className="h-5 w-5 text-primary-foreground" />
           </div>
           <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
-            PSG Hospital
+            MediVoice
           </span>
         </Link>
 

@@ -111,6 +111,149 @@ export default function Dashboard() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Fallback report generation when Edge Function is not available
+  const generateFallbackReport = async (transcription: string, reportType: string) => {
+    console.log('Generating fallback report for type:', reportType);
+    
+    // Simulate streaming by adding content progressively
+    const generateContent = () => {
+      const patientIdMatch = transcription.match(/Patient ID:\s*([^\n]+)/);
+      const doctorMatch = transcription.match(/Attending Physician:\s*([^\n]+)/);
+      
+      const patientId = patientIdMatch ? patientIdMatch[1] : 'Not specified';
+      const doctorName = doctorMatch ? doctorMatch[1] : 'Not specified';
+      
+      let report = '';
+      
+      switch (reportType) {
+        case 'general':
+          report = `MEDIVOICE HOSPITAL
+SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
+
+COMPREHENSIVE DIAGNOSTIC REPORT
+
+PATIENT INFORMATION
+- Patient ID: ${patientId}
+
+ATTENDING PHYSICIAN
+${doctorName}
+
+BACKGROUND & MANIFESTATIONS
+${transcription.replace(/Patient ID:[^\n]+\n\n/, '').replace(/Attending Physician:[^\n]+\n\n/, '')}
+
+TESTS ADMINISTERED AND RESULTS OBTAINED
+- Information not provided in transcription
+
+OBSERVATIONS
+- Clinical observations not detailed in transcription
+
+SUMMARY / DIAGNOSIS
+- Diagnosis information not available in transcription
+
+RECOMMENDATION
+- Treatment recommendations not specified in transcription
+
+Note: This is a basic template generated from your transcription. For comprehensive AI-powered reports, please deploy the Supabase Edge Function.`;
+          break;
+          
+        case 'soap':
+          report = `MEDIVOICE HOSPITAL
+SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
+
+COMPREHENSIVE DIAGNOSTIC REPORT
+
+PATIENT INFORMATION
+- Patient ID: ${patientId}
+
+ATTENDING PHYSICIAN
+${doctorName}
+
+S (Subjective)
+${transcription.replace(/Patient ID:[^\n]+\n\n/, '').replace(/Attending Physician:[^\n]+\n\n/, '')}
+
+O (Objective)
+- Vital signs: Not specified
+- Physical examination: Not detailed in transcription
+
+A (Assessment)
+- Primary diagnosis: Not specified in transcription
+
+P (Plan)
+- Treatment plan: Not specified in transcription
+
+RECOMMENDATION
+- Follow-up recommendations not available
+
+Note: This is a basic SOAP template generated from your transcription. For comprehensive AI-powered reports, please deploy the Supabase Edge Function.`;
+          break;
+          
+        case 'diagnostic':
+          report = `MEDIVOICE HOSPITAL
+SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
+
+COMPREHENSIVE DIAGNOSTIC REPORT
+
+PATIENT INFORMATION
+- Patient ID: ${patientId}
+- Age, Gender: Not specified
+- Date of specimen collection: Not specified
+
+ATTENDING PHYSICIAN
+${doctorName}
+
+SPECIMEN INFORMATION
+- Specimen type: Not specified in transcription
+- Collection details: Not available
+
+GROSS DESCRIPTION
+- Gross findings: Not described in transcription
+
+MICROSCOPIC DESCRIPTION
+- Microscopic findings: Not detailed in transcription
+
+DIAGNOSIS
+- Pathologic diagnosis: Not specified in transcription
+
+COMMENT
+- Additional comments: Not provided
+
+Note: This is a basic diagnostic template generated from your transcription. For comprehensive AI-powered reports, please deploy the Supabase Edge Function.`;
+          break;
+          
+        default:
+          report = `MEDIVOICE HOSPITAL
+
+BASIC TRANSCRIPTION SUMMARY
+
+Patient ID: ${patientId}
+Attending Physician: ${doctorName}
+
+TRANSCRIPTION:
+${transcription.replace(/Patient ID:[^\n]+\n\n/, '').replace(/Attending Physician:[^\n]+\n\n/, '')}
+
+Note: This is a basic summary. For comprehensive AI-powered reports, please deploy the Supabase Edge Function.`;
+      }
+      
+      return report;
+    };
+
+    // Simulate streaming effect
+    const fullReport = generateContent();
+    const words = fullReport.split(' ');
+    let currentText = '';
+    
+    for (let i = 0; i < words.length; i++) {
+      currentText += words[i] + ' ';
+      setGeneratedReport(currentText);
+      await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay between words
+    }
+    
+    toast({
+      title: 'Report Generated',
+      description: 'Basic report created. Deploy Edge Function for AI-powered reports.',
+    });
+  };
+
   const generateReport = async () => {
     const textToProcess = editedTranscript || transcript;
     if (!textToProcess.trim()) {
@@ -156,8 +299,11 @@ export default function Dashboard() {
       );
 
       if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error('AI report generation service is not available. Please contact support or try again later.');
+        // If Edge Function fails, use fallback local generation
+        if (response.status === 404 || response.status >= 500) {
+          console.log('Edge Function not available, using fallback generation');
+          await generateFallbackReport(enhancedTranscription, reportType);
+          return;
         }
         if (response.status === 429) {
           throw new Error('Rate limit exceeded. Please try again later.');
@@ -216,6 +362,14 @@ export default function Dashboard() {
     } catch (err) {
       console.error('Report generation error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate report';
+      
+      // If it's a network/configuration error, try fallback
+      if (errorMessage.includes('fetch') || errorMessage.includes('Supabase') || errorMessage.includes('Failed to generate report')) {
+        console.log('Network error, using fallback generation');
+        await generateFallbackReport(enhancedTranscription, reportType);
+        return;
+      }
+      
       toast({
         variant: 'destructive',
         title: 'Generation failed',
@@ -446,7 +600,7 @@ export default function Dashboard() {
                     <Label htmlFor="patientId">Patient ID</Label>
                     <Input
                       id="patientId"
-                      placeholder="Enter patient ID (e.g., PSG-2024-001)"
+                      placeholder="Enter patient ID (e.g., MV-2024-001)"
                       value={patientId}
                       onChange={(e) => setPatientId(e.target.value)}
                     />

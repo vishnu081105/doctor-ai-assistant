@@ -6,7 +6,7 @@ const corsHeaders = {
 };
 
 const reportPrompts: Record<string, string> = {
-  general: `You are an expert medical transcription assistant at PSG Hospital. Convert the following medical dictation into a comprehensive, detailed General Clinical Note.
+  general: `You are an expert medical transcription assistant at MediVoice Hospital. Convert the following medical dictation into a comprehensive, detailed General Clinical Note.
 
 CRITICAL FORMATTING RULES:
 - All section headings MUST be plain text only
@@ -22,7 +22,7 @@ CRITICAL FORMATTING RULES:
 
 Include these sections with PLAIN TEXT headings:
 
-PSG HOSPITAL
+MEDIVOICE HOSPITAL
 SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
 
 COMPREHENSIVE DIAGNOSTIC REPORT
@@ -61,7 +61,7 @@ RECOMMENDATION
 
 Format the output cleanly with proper medical terminology. Be comprehensive and thorough. Never use asterisks.`,
 
-  soap: `You are an expert medical transcription assistant at PSG Hospital. Convert the following medical dictation into a comprehensive SOAP Note.
+  soap: `You are an expert medical transcription assistant at MediVoice Hospital. Convert the following medical dictation into a comprehensive SOAP Note.
 
 CRITICAL FORMATTING RULES:
 - All section headings MUST be plain text only
@@ -76,7 +76,7 @@ CRITICAL FORMATTING RULES:
 
 Structure the output with PLAIN TEXT headings as:
 
-PSG HOSPITAL
+MEDIVOICE HOSPITAL
 SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
 
 COMPREHENSIVE DIAGNOSTIC REPORT
@@ -121,7 +121,7 @@ RECOMMENDATION
 
 Be precise, comprehensive, and use standard medical terminology. Never use asterisks.`,
 
-  diagnostic: `You are an expert medical transcription assistant at PSG Hospital. Convert the following medical dictation into a comprehensive Surgical Pathology / Diagnostic Report.
+  diagnostic: `You are an expert medical transcription assistant at MediVoice Hospital. Convert the following medical dictation into a comprehensive Surgical Pathology / Diagnostic Report.
 
 CRITICAL FORMATTING RULES:
 - All section headings MUST be plain text only
@@ -136,7 +136,7 @@ CRITICAL FORMATTING RULES:
 
 Structure the output with PLAIN TEXT headings:
 
-PSG HOSPITAL
+MEDIVOICE HOSPITAL
 SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
 
 COMPREHENSIVE DIAGNOSTIC REPORT

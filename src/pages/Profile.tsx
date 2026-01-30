@@ -280,7 +280,7 @@ export default function Profile() {
                 <Label htmlFor="clinicName">Organization Name</Label>
                 <Input
                   id="clinicName"
-                  placeholder="PSG Hospital"
+                  placeholder="MediVoice Hospital"
                   value={clinicName}
                   onChange={(e) => setClinicName(e.target.value)}
                 />
