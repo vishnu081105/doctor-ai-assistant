@@ -1,23 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Header } from '@/components/Header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/hooks/useAuth';
 import { getSetting, setSetting } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
-import { User, Building2, Mail, Save, Loader2 } from 'lucide-react';
+import { User, Building2, Mail, Save, Loader2, Camera, Upload } from 'lucide-react';
 
 export default function Profile() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [doctorName, setDoctorName] = useState('');
   const [clinicName, setClinicName] = useState('');
   const [specialty, setSpecialty] = useState('');
   const [phone, setPhone] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -28,11 +30,13 @@ export default function Profile() {
         const savedClinicName = await getSetting<string>('clinicName');
         const savedSpecialty = await getSetting<string>('specialty');
         const savedPhone = await getSetting<string>('phone');
+        const savedAvatarUrl = await getSetting<string>('avatarUrl');
         
         if (savedDoctorName) setDoctorName(savedDoctorName);
         if (savedClinicName) setClinicName(savedClinicName);
         if (savedSpecialty) setSpecialty(savedSpecialty);
         if (savedPhone) setPhone(savedPhone);
+        if (savedAvatarUrl) setAvatarUrl(savedAvatarUrl);
       } finally {
         setIsLoading(false);
       }
@@ -41,6 +45,43 @@ export default function Profile() {
     loadProfile();
   }, []);
 
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid file type',
+        description: 'Please upload an image file.',
+      });
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        variant: 'destructive',
+        title: 'File too large',
+        description: 'Please upload an image smaller than 2MB.',
+      });
+      return;
+    }
+
+    // Convert to base64 for local storage
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target?.result as string;
+      setAvatarUrl(base64);
+      toast({
+        title: 'Photo updated',
+        description: 'Click Save Profile to keep your changes.',
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
@@ -48,6 +89,7 @@ export default function Profile() {
       await setSetting('clinicName', clinicName);
       await setSetting('specialty', specialty);
       await setSetting('phone', phone);
+      await setSetting('avatarUrl', avatarUrl);
       
       toast({
         title: 'Profile saved',
@@ -62,6 +104,15 @@ export default function Profile() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   if (isLoading) {
@@ -90,6 +141,51 @@ export default function Profile() {
         </div>
 
         <div className="space-y-6">
+          {/* Profile Photo Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                  <Camera className="h-5 w-5" />
+                </div>
+                <div>
+                  <CardTitle>Profile Photo</CardTitle>
+                  <CardDescription>Upload a professional photo</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-6">
+                <Avatar className="h-24 w-24 border-4 border-primary/20">
+                  <AvatarImage src={avatarUrl} alt={doctorName || 'Doctor'} />
+                  <AvatarFallback className="bg-primary/10 text-primary text-2xl font-semibold">
+                    {doctorName ? getInitials(doctorName) : <User className="h-10 w-10" />}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="space-y-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="gap-2"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Upload Photo
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    JPG, PNG or GIF. Max 2MB.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Account Info Card */}
           <Card>
             <CardHeader>
@@ -105,9 +201,12 @@ export default function Profile() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-3 rounded-lg bg-secondary/50 p-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                  <User className="h-6 w-6 text-primary" />
-                </div>
+                <Avatar className="h-12 w-12">
+                  <AvatarImage src={avatarUrl} alt={doctorName || 'Doctor'} />
+                  <AvatarFallback className="bg-primary/10 text-primary">
+                    {doctorName ? getInitials(doctorName) : <User className="h-6 w-6" />}
+                  </AvatarFallback>
+                </Avatar>
                 <div>
                   <p className="font-medium">{doctorName || 'Doctor'}</p>
                   <p className="text-sm text-muted-foreground">{user?.email}</p>
@@ -155,7 +254,7 @@ export default function Profile() {
                 <Input
                   id="phone"
                   type="tel"
-                  placeholder="+1 (555) 000-0000"
+                  placeholder="+91 98765 43210"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                 />
@@ -181,7 +280,7 @@ export default function Profile() {
                 <Label htmlFor="clinicName">Organization Name</Label>
                 <Input
                   id="clinicName"
-                  placeholder="City Medical Center"
+                  placeholder="PSG Hospital"
                   value={clinicName}
                   onChange={(e) => setClinicName(e.target.value)}
                 />

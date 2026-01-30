@@ -7,8 +7,10 @@ import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Mic, Square, Sparkles, Loader2, Save, RotateCcw, AlertCircle, Edit } from 'lucide-react';
-import { ReportType, saveReport, generateId } from '@/lib/db';
+import { ReportType, saveReport, generateId, getSetting } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -20,6 +22,8 @@ export default function Dashboard() {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isEditingTranscription, setIsEditingTranscription] = useState(false);
   const [editedTranscript, setEditedTranscript] = useState('');
+  const [patientId, setPatientId] = useState('');
+  const [doctorName, setDoctorName] = useState('');
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   
   const { toast } = useToast();
@@ -35,6 +39,15 @@ export default function Dashboard() {
     isSupported,
     error,
   } = useSpeechRecognition();
+
+  // Load doctor name from settings
+  useEffect(() => {
+    const loadDoctorName = async () => {
+      const name = await getSetting<string>('doctorName');
+      if (name) setDoctorName(name);
+    };
+    loadDoctorName();
+  }, []);
 
   // Sync edited transcript with live transcript
   useEffect(() => {
@@ -77,15 +90,19 @@ export default function Dashboard() {
     setRecordingDuration(0);
     setIsEditingTranscription(false);
     setEditedTranscript('');
+    setPatientId('');
   };
 
   const handleSaveTranscriptionEdit = (text: string) => {
     setEditedTranscript(text);
     setIsEditingTranscription(false);
-    toast({ title: 'Transcription updated' });
+    toast({ 
+      title: 'Transcription saved',
+      description: 'Your edits have been saved successfully.'
+    });
   };
 
-  const currentTranscript = isEditingTranscription ? editedTranscript : (editedTranscript || transcript);
+  const currentTranscript = editedTranscript || transcript;
   const wordCount = (currentTranscript + ' ' + interimTranscript).trim().split(/\s+/).filter(Boolean).length;
 
   const formatDuration = (seconds: number) => {
@@ -108,6 +125,15 @@ export default function Dashboard() {
     setIsGenerating(true);
     setGeneratedReport('');
 
+    // Add patient ID and doctor name context to transcription
+    let enhancedTranscription = textToProcess;
+    if (patientId) {
+      enhancedTranscription = `Patient ID: ${patientId}\n\n${enhancedTranscription}`;
+    }
+    if (doctorName) {
+      enhancedTranscription = `Attending Physician: ${doctorName}\n\n${enhancedTranscription}`;
+    }
+
     try {
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-report`,
@@ -118,7 +144,7 @@ export default function Dashboard() {
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
           body: JSON.stringify({
-            transcription: textToProcess,
+            transcription: enhancedTranscription,
             reportType,
           }),
         }
@@ -208,6 +234,8 @@ export default function Dashboard() {
         updatedAt: new Date(),
         duration: recordingDuration,
         wordCount,
+        patientId: patientId || undefined,
+        doctorName: doctorName || undefined,
       };
 
       await saveReport(report);
@@ -395,18 +423,43 @@ export default function Dashboard() {
             </Card>
           )}
 
-          {/* Report Type Selection */}
+          {/* Patient Info & Report Type Selection */}
           {(transcript || editedTranscript) && !isListening && !isEditingTranscription && (
             <Card>
               <CardHeader>
-                <CardTitle>Report Format</CardTitle>
-                <CardDescription>Select the type of report to generate</CardDescription>
+                <CardTitle>Report Information</CardTitle>
+                <CardDescription>Enter patient details and select report format</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <ReportTypeSelector
-                  selectedType={reportType}
-                  onSelect={setReportType}
-                />
+                {/* Patient ID Input */}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="patientId">Patient ID</Label>
+                    <Input
+                      id="patientId"
+                      placeholder="Enter patient ID (e.g., PSG-2024-001)"
+                      value={patientId}
+                      onChange={(e) => setPatientId(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Attending Physician</Label>
+                    <Input
+                      value={doctorName}
+                      disabled
+                      className="bg-secondary/50"
+                      placeholder="Set in profile settings"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Report Type</Label>
+                  <ReportTypeSelector
+                    selectedType={reportType}
+                    onSelect={setReportType}
+                  />
+                </div>
                 
                 <Button
                   onClick={generateReport}

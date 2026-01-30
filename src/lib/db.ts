@@ -11,6 +11,8 @@ export interface Report {
   updatedAt: Date;
   duration: number; // in seconds
   wordCount: number;
+  patientId?: string;
+  doctorName?: string;
 }
 
 export interface Template {
