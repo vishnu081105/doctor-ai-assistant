@@ -7,115 +7,108 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.1"
+  }
   public: {
     Tables: {
       reports: {
         Row: {
+          created_at: string
+          doctor_name: string | null
+          duration: number
           id: string
-          user_id: string
-          transcription: string
+          patient_id: string | null
           report_content: string
           report_type: string
-          created_at: string
+          transcription: string
           updated_at: string
-          duration: number
+          user_id: string
           word_count: number
         }
         Insert: {
-          id?: string
-          user_id: string
-          transcription: string
-          report_content: string
-          report_type: string
           created_at?: string
-          updated_at?: string
-          duration: number
-          word_count: number
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          transcription?: string
-          report_content?: string
-          report_type?: string
-          created_at?: string
-          updated_at?: string
+          doctor_name?: string | null
           duration?: number
+          id?: string
+          patient_id?: string | null
+          report_content: string
+          report_type?: string
+          transcription: string
+          updated_at?: string
+          user_id: string
           word_count?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "reports_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
-        ]
+        Update: {
+          created_at?: string
+          doctor_name?: string | null
+          duration?: number
+          id?: string
+          patient_id?: string | null
+          report_content?: string
+          report_type?: string
+          transcription?: string
+          updated_at?: string
+          user_id?: string
+          word_count?: number
+        }
+        Relationships: []
       }
       settings: {
         Row: {
+          created_at: string
           id: string
-          user_id: string
           key: string
+          updated_at: string
+          user_id: string
           value: Json | null
         }
         Insert: {
+          created_at?: string
           id?: string
-          user_id: string
           key: string
+          updated_at?: string
+          user_id: string
           value?: Json | null
         }
         Update: {
+          created_at?: string
           id?: string
-          user_id?: string
           key?: string
+          updated_at?: string
+          user_id?: string
           value?: Json | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "settings_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
-        ]
+        Relationships: []
       }
       templates: {
         Row: {
-          id: string
-          user_id: string
-          name: string
-          content: string
           category: string
+          content: string
           created_at: string
+          id: string
+          name: string
+          user_id: string
         }
         Insert: {
-          id?: string
-          user_id: string
-          name: string
+          category?: string
           content: string
-          category: string
           created_at?: string
+          id?: string
+          name: string
+          user_id: string
         }
         Update: {
-          id?: string
-          user_id?: string
-          name?: string
-          content?: string
           category?: string
+          content?: string
           created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "templates_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
-        ]
+        Relationships: []
       }
     }
     Views: {

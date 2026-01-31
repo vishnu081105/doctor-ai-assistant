@@ -43,7 +43,7 @@ export function TemplateManager({ onInsertTemplate, mode = 'manage' }: TemplateM
       return;
     }
 
-    const template: Template = {
+    const template = {
       name: newName,
       content: newContent,
       category: newCategory || 'General',
