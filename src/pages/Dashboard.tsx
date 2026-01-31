@@ -14,6 +14,7 @@ import { ReportType, saveReport, generateId, getSetting } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Dashboard() {
   const [reportType, setReportType] = useState<ReportType>('general');

@@ -229,8 +229,8 @@ export async function setSetting<T>(key: string, value: T): Promise<void> {
     .upsert({
       user_id: userId,
       key,
-      value,
-    });
+      value: value as any,
+    }, { onConflict: 'user_id,key' });
   if (error) throw error;
 }
 
