@@ -197,46 +197,41 @@ function isValidReportType(type: string): type is keyof typeof reportPrompts {
 
 // Function to create a readable stream transformer for cleaning asterisks
 function createStreamTransformer() {
-  let buffer = '';
-
   return new TransformStream({
     transform(chunk, controller) {
-      const text = new TextDecoder().decode(chunk);
-      buffer += text;
+      try {
+        const text = new TextDecoder().decode(chunk);
+        const lines = text.split('\n');
 
-      // Process complete lines
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') {
-            controller.enqueue(new TextEncoder().encode(`${line}\n\n`));
-            continue;
-          }
-
-          try {
-            const parsed = JSON.parse(jsonStr);
-            if (parsed.choices?.[0]?.delta?.content) {
-              // Clean asterisks from the content
-              parsed.choices[0].delta.content = cleanAsterisks(parsed.choices[0].delta.content);
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr === '[DONE]') {
+              controller.enqueue(new TextEncoder().encode(`data: [DONE]\n\n`));
+              continue;
             }
-            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(parsed)}\n\n`));
-          } catch (e) {
-            // If parsing fails, pass through unchanged
-            controller.enqueue(new TextEncoder().encode(`${line}\n\n`));
-          }
-        } else {
-          controller.enqueue(new TextEncoder().encode(`${line}\n\n`));
-        }
-      }
-    },
 
-    flush(controller) {
-      // Handle any remaining buffer
-      if (buffer) {
-        controller.enqueue(new TextEncoder().encode(`${buffer}\n\n`));
+            try {
+              const parsed = JSON.parse(jsonStr);
+              if (parsed.choices?.[0]?.delta?.content) {
+                // Clean asterisks from the content
+                parsed.choices[0].delta.content = cleanAsterisks(parsed.choices[0].delta.content);
+              }
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(parsed)}\n\n`));
+            } catch (parseError) {
+              // If JSON parsing fails, pass through the original line
+              console.warn('Failed to parse JSON in stream:', parseError);
+              controller.enqueue(new TextEncoder().encode(`${line}\n`));
+            }
+          } else if (line.trim()) {
+            // Pass through non-data lines (like comments)
+            controller.enqueue(new TextEncoder().encode(`${line}\n`));
+          }
+        }
+      } catch (error) {
+        console.error('Stream transformation error:', error);
+        // On error, pass through the original chunk
+        controller.enqueue(chunk);
       }
     }
   });
@@ -305,26 +300,34 @@ serve(async (req) => {
 
     console.log(`Generating ${reportType} report for transcription length: ${transcription.length}`);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { 
-            role: "user", 
-            content: `Please convert this medical dictation into a ${reportType} report. Remember: NO asterisks, NO markdown formatting, NO special characters for headings. Use plain text only:\n\n${transcription}` 
-          },
-        ],
-        stream: true,
-        temperature: 0.1, // Lower temperature for more consistent medical reports
-        max_tokens: 4000, // Ensure sufficient length for comprehensive reports
-      }),
-    });
+    // Create AbortController for timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+    try {
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-flash-preview",
+          messages: [
+            { role: "system", content: systemPrompt },
+            {
+              role: "user",
+              content: `Please convert this medical dictation into a ${reportType} report. Remember: NO asterisks, NO markdown formatting, NO special characters for headings. Use plain text only:\n\n${transcription}`
+            },
+          ],
+          stream: true,
+          temperature: 0.1, // Lower temperature for more consistent medical reports
+          max_tokens: 4000, // Ensure sufficient length for comprehensive reports
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
@@ -336,11 +339,18 @@ serve(async (req) => {
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
+
       if (response.status === 402) {
         return new Response(
           JSON.stringify({ error: "AI service quota exceeded. Please check your account limits." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (response.status === 413) {
+        return new Response(
+          JSON.stringify({ error: "Transcription too long. Please shorten your input." }),
+          { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -358,27 +368,59 @@ serve(async (req) => {
     }
 
     // Transform the stream to clean asterisks
-    const transformedStream = response.body?.pipeThrough(createStreamTransformer());
+    if (!response.body) {
+      return new Response(
+        JSON.stringify({ error: "No response stream from AI service" }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    return new Response(transformedStream, {
-      headers: { 
-        ...corsHeaders, 
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-      },
-    });
+    try {
+      const transformedStream = response.body.pipeThrough(createStreamTransformer());
+
+      return new Response(transformedStream, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        },
+      });
+    } catch (streamError) {
+      console.error("Stream processing error:", streamError);
+      return new Response(
+        JSON.stringify({ error: "Failed to process AI response stream" }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
   } catch (e) {
     console.error("generate-report function error:", e);
-    
+
+    // Handle specific error types
+    if (e instanceof Error) {
+      if (e.name === 'AbortError') {
+        return new Response(
+          JSON.stringify({ error: "Request timeout. Please try again." }),
+          { status: 408, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (e.message.includes('fetch')) {
+        return new Response(
+          JSON.stringify({ error: "Network error. Please check your connection and try again." }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     const errorMessage = e instanceof Error ? e.message : "Unknown error occurred";
-    
+
     return new Response(
       JSON.stringify({ error: `Internal server error: ${errorMessage}` }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
       }
     );
   }
