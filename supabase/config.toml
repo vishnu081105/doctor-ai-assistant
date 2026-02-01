@@ -2,3 +2,6 @@ project_id = "tpnbolvvrruddaidclrt"
 
 [functions.generate-report]
 verify_jwt = false
+
+[functions.enhance-transcription]
+verify_jwt = false
