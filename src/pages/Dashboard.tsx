@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Mic, Square, Sparkles, Loader2, Save, RotateCcw, AlertCircle, Edit } from 'lucide-react';
+import { Mic, Square, Sparkles, Loader2, Save, RotateCcw, AlertCircle, Edit, Wand2 } from 'lucide-react';
 import { ReportType, saveReport, generateId, getSetting } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -25,6 +25,7 @@ export default function Dashboard() {
   const [editedTranscript, setEditedTranscript] = useState('');
   const [patientId, setPatientId] = useState('');
   const [doctorName, setDoctorName] = useState('');
+  const [isEnhancing, setIsEnhancing] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   
   const { toast } = useToast();
@@ -101,6 +102,66 @@ export default function Dashboard() {
       title: 'Transcription saved',
       description: 'Your edits have been saved successfully.'
     });
+  };
+
+  const handleEnhanceTranscription = async () => {
+    const textToEnhance = editedTranscript || transcript;
+    if (!textToEnhance.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'No transcription',
+        description: 'Please record some audio first.',
+      });
+      return;
+    }
+
+    setIsEnhancing(true);
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/enhance-transcription`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            transcription: textToEnhance,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error('Rate limit exceeded. Please try again later.');
+        }
+        if (response.status === 402) {
+          throw new Error('AI usage limit reached. Please add credits to continue.');
+        }
+        throw new Error(`Enhancement failed (${response.status})`);
+      }
+
+      const data = await response.json();
+      
+      if (data.enhanced) {
+        setEditedTranscript(data.enhanced);
+        toast({
+          title: 'Transcription Enhanced',
+          description: 'Medical terminology and grammar have been corrected.',
+        });
+      }
+    } catch (err) {
+      console.error('Enhancement error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to enhance transcription';
+      toast({
+        variant: 'destructive',
+        title: 'Enhancement failed',
+        description: errorMessage,
+      });
+    } finally {
+      setIsEnhancing(false);
+    }
   };
 
   const currentTranscript = editedTranscript || transcript;
@@ -537,15 +598,36 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle>Transcription</CardTitle>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsEditingTranscription(true)}
-                      className="gap-2"
-                    >
-                      <Edit className="h-4 w-4" />
-                      Edit
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleEnhanceTranscription}
+                        disabled={isEnhancing}
+                        className="gap-2"
+                      >
+                        {isEnhancing ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Enhancing...
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="h-4 w-4" />
+                            Enhance with AI
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsEditingTranscription(true)}
+                        className="gap-2"
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
