@@ -1,3 +1,4 @@
+// @ts-ignore: Deno module
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -23,7 +24,6 @@ CRITICAL FORMATTING RULES:
 Include these sections with PLAIN TEXT headings:
 
 MEDIVOICE HOSPITAL
-SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
 
 COMPREHENSIVE DIAGNOSTIC REPORT
 
@@ -76,8 +76,7 @@ CRITICAL FORMATTING RULES:
 
 Structure the output with PLAIN TEXT headings as:
 
-MEDIVOICE HOSPITAL
-SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
+PSG HOSPITAL
 
 COMPREHENSIVE DIAGNOSTIC REPORT
 
@@ -137,7 +136,6 @@ CRITICAL FORMATTING RULES:
 Structure the output with PLAIN TEXT headings:
 
 MEDIVOICE HOSPITAL
-SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
 
 COMPREHENSIVE DIAGNOSTIC REPORT
 
@@ -237,7 +235,7 @@ function createStreamTransformer() {
   });
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -251,8 +249,7 @@ serve(async (req) => {
     );
   }
 
-  try {
-    const body = await req.json().catch(() => null);
+  const body = await req.json().catch(() => null);
     
     if (!body) {
       return new Response(
@@ -287,6 +284,7 @@ serve(async (req) => {
     }
 
     // Check for API key
+    // @ts-ignore: Deno global
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       console.error("LOVABLE_API_KEY environment variable is not set");

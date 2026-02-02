@@ -237,7 +237,6 @@ export default function Dashboard() {
       switch (reportType) {
         case 'general':
           report = `MEDIVOICE HOSPITAL
-SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
 
 COMPREHENSIVE DIAGNOSTIC REPORT
 
@@ -267,7 +266,6 @@ Note: This is a basic template generated from your transcription. For comprehens
           
         case 'soap':
           report = `MEDIVOICE HOSPITAL
-SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
 
 COMPREHENSIVE DIAGNOSTIC REPORT
 
@@ -298,7 +296,6 @@ Note: This is a basic SOAP template generated from your transcription. For compr
           
         case 'diagnostic':
           report = `MEDIVOICE HOSPITAL
-SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
 
 COMPREHENSIVE DIAGNOSTIC REPORT
 
