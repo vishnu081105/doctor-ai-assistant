@@ -4,13 +4,15 @@ import { AudioWaveform } from '@/components/AudioWaveform';
 import { ReportTypeSelector } from '@/components/ReportTypeSelector';
 import { TranscriptionEditor } from '@/components/TranscriptionEditor';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { useAudioRecording } from '@/hooks/useAudioRecording';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Mic, Square, Sparkles, Loader2, Save, RotateCcw, AlertCircle, Edit } from 'lucide-react';
-import { ReportType, saveReport, generateId, getSetting } from '@/lib/db';
+import { Switch } from '@/components/ui/switch';
+import { Mic, Square, Sparkles, Loader2, Save, RotateCcw, AlertCircle, Edit, Wand2, Users, Play, Pause, Volume2 } from 'lucide-react';
+import { ReportType, saveReport, getSetting, updateReport } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -25,7 +27,12 @@ export default function Dashboard() {
   const [editedTranscript, setEditedTranscript] = useState('');
   const [patientId, setPatientId] = useState('');
   const [doctorName, setDoctorName] = useState('');
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [enableDiarization, setEnableDiarization] = useState(true);
+  const [detectedSpeakers, setDetectedSpeakers] = useState<string[]>([]);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -38,8 +45,18 @@ export default function Dashboard() {
     stopListening,
     resetTranscript,
     isSupported,
-    error,
+    error: speechError,
   } = useSpeechRecognition();
+
+  const {
+    audioBlob,
+    audioUrl,
+    startRecording,
+    stopRecording,
+    resetRecording,
+    uploadRecording,
+    error: recordingError,
+  } = useAudioRecording();
 
   // Load doctor name from settings
   useEffect(() => {
@@ -52,10 +69,10 @@ export default function Dashboard() {
 
   // Sync edited transcript with live transcript
   useEffect(() => {
-    if (!isEditingTranscription) {
+    if (!isEditingTranscription && !editedTranscript) {
       setEditedTranscript(transcript);
     }
-  }, [transcript, isEditingTranscription]);
+  }, [transcript, isEditingTranscription, editedTranscript]);
 
   // Recording timer
   useEffect(() => {
@@ -74,24 +91,32 @@ export default function Dashboard() {
     };
   }, [isListening]);
 
-  const handleStartRecording = () => {
+  const handleStartRecording = async () => {
     setRecordingDuration(0);
     setGeneratedReport('');
     setIsEditingTranscription(false);
+    setEditedTranscript('');
+    setDetectedSpeakers([]);
+    
+    // Start both speech recognition and audio recording
+    await startRecording();
     startListening();
   };
 
-  const handleStopRecording = () => {
+  const handleStopRecording = async () => {
     stopListening();
+    await stopRecording();
   };
 
   const handleReset = () => {
     resetTranscript();
+    resetRecording();
     setGeneratedReport('');
     setRecordingDuration(0);
     setIsEditingTranscription(false);
     setEditedTranscript('');
     setPatientId('');
+    setDetectedSpeakers([]);
   };
 
   const handleSaveTranscriptionEdit = (text: string) => {
@@ -101,6 +126,90 @@ export default function Dashboard() {
       title: 'Transcription saved',
       description: 'Your edits have been saved successfully.'
     });
+  };
+
+  const handleEnhanceTranscription = async () => {
+    const textToEnhance = editedTranscript || transcript;
+    if (!textToEnhance.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'No transcription',
+        description: 'Please record some audio first.',
+      });
+      return;
+    }
+
+    setIsEnhancing(true);
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-transcription`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            transcription: textToEnhance,
+            enableDiarization,
+            enhanceTerminology: true,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error('Rate limit exceeded. Please try again later.');
+        }
+        if (response.status === 402) {
+          throw new Error('AI usage limit reached. Please add credits to continue.');
+        }
+        throw new Error(`Enhancement failed (${response.status})`);
+      }
+
+      const data = await response.json();
+      
+      if (data.processed) {
+        setEditedTranscript(data.processed);
+        if (data.speakers && data.speakers.length > 0) {
+          setDetectedSpeakers(data.speakers);
+        }
+        toast({
+          title: enableDiarization ? 'Transcription Enhanced with Speaker Labels' : 'Transcription Enhanced',
+          description: enableDiarization 
+            ? `Detected speakers: ${data.speakers?.join(', ') || 'None identified'}`
+            : 'Medical terminology and grammar have been corrected.',
+        });
+      }
+    } catch (err) {
+      console.error('Enhancement error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to enhance transcription';
+      toast({
+        variant: 'destructive',
+        title: 'Enhancement failed',
+        description: errorMessage,
+      });
+    } finally {
+      setIsEnhancing(false);
+    }
+  };
+
+  const handlePlayAudio = () => {
+    if (!audioUrl) return;
+    
+    if (!audioPlayerRef.current) {
+      audioPlayerRef.current = new Audio(audioUrl);
+      audioPlayerRef.current.onended = () => setIsPlayingAudio(false);
+    }
+    
+    if (isPlayingAudio) {
+      audioPlayerRef.current.pause();
+      setIsPlayingAudio(false);
+    } else {
+      audioPlayerRef.current.play();
+      setIsPlayingAudio(true);
+    }
   };
 
   const currentTranscript = editedTranscript || transcript;
@@ -116,13 +225,12 @@ export default function Dashboard() {
   const generateFallbackReport = async (transcription: string, reportType: string) => {
     console.log('Generating fallback report for type:', reportType);
     
-    // Simulate streaming by adding content progressively
     const generateContent = () => {
       const patientIdMatch = transcription.match(/Patient ID:\s*([^\n]+)/);
       const doctorMatch = transcription.match(/Attending Physician:\s*([^\n]+)/);
       
-      const patientId = patientIdMatch ? patientIdMatch[1] : 'Not specified';
-      const doctorName = doctorMatch ? doctorMatch[1] : 'Not specified';
+      const patientIdVal = patientIdMatch ? patientIdMatch[1] : 'Not specified';
+      const doctorNameVal = doctorMatch ? doctorMatch[1] : 'Not specified';
       
       let report = '';
       
@@ -134,10 +242,10 @@ SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
 COMPREHENSIVE DIAGNOSTIC REPORT
 
 PATIENT INFORMATION
-- Patient ID: ${patientId}
+- Patient ID: ${patientIdVal}
 
 ATTENDING PHYSICIAN
-${doctorName}
+${doctorNameVal}
 
 BACKGROUND & MANIFESTATIONS
 ${transcription.replace(/Patient ID:[^\n]+\n\n/, '').replace(/Attending Physician:[^\n]+\n\n/, '')}
@@ -164,10 +272,10 @@ SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
 COMPREHENSIVE DIAGNOSTIC REPORT
 
 PATIENT INFORMATION
-- Patient ID: ${patientId}
+- Patient ID: ${patientIdVal}
 
 ATTENDING PHYSICIAN
-${doctorName}
+${doctorNameVal}
 
 S (Subjective)
 ${transcription.replace(/Patient ID:[^\n]+\n\n/, '').replace(/Attending Physician:[^\n]+\n\n/, '')}
@@ -195,12 +303,12 @@ SONOMAWORKS LEAP (Learning Enhancement & Achievement Program)
 COMPREHENSIVE DIAGNOSTIC REPORT
 
 PATIENT INFORMATION
-- Patient ID: ${patientId}
+- Patient ID: ${patientIdVal}
 - Age, Gender: Not specified
 - Date of specimen collection: Not specified
 
 ATTENDING PHYSICIAN
-${doctorName}
+${doctorNameVal}
 
 SPECIMEN INFORMATION
 - Specimen type: Not specified in transcription
@@ -226,8 +334,8 @@ Note: This is a basic diagnostic template generated from your transcription. For
 
 BASIC TRANSCRIPTION SUMMARY
 
-Patient ID: ${patientId}
-Attending Physician: ${doctorName}
+Patient ID: ${patientIdVal}
+Attending Physician: ${doctorNameVal}
 
 TRANSCRIPTION:
 ${transcription.replace(/Patient ID:[^\n]+\n\n/, '').replace(/Attending Physician:[^\n]+\n\n/, '')}
@@ -238,7 +346,6 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
       return report;
     };
 
-    // Simulate streaming effect
     const fullReport = generateContent();
     const words = fullReport.split(' ');
     let currentText = '';
@@ -246,7 +353,7 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
     for (let i = 0; i < words.length; i++) {
       currentText += words[i] + ' ';
       setGeneratedReport(currentText);
-      await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay between words
+      await new Promise(resolve => setTimeout(resolve, 50));
     }
     
     toast({
@@ -269,7 +376,6 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
     setIsGenerating(true);
     setGeneratedReport('');
 
-    // Add patient ID and doctor name context to transcription
     let enhancedTranscription = textToProcess;
     if (patientId) {
       enhancedTranscription = `Patient ID: ${patientId}\n\n${enhancedTranscription}`;
@@ -279,7 +385,6 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
     }
 
     try {
-      // Check if Supabase URL is configured
       if (!import.meta.env.VITE_SUPABASE_URL) {
         throw new Error('Supabase is not configured. Please check your environment variables.');
       }
@@ -300,7 +405,6 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
       );
 
       if (!response.ok) {
-        // If Edge Function fails, use fallback local generation
         if (response.status === 404 || response.status >= 500) {
           console.log('Edge Function not available, using fallback generation');
           await generateFallbackReport(enhancedTranscription, reportType);
@@ -311,9 +415,6 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
         }
         if (response.status === 402) {
           throw new Error('AI usage limit reached. Please add credits to continue.');
-        }
-        if (response.status >= 500) {
-          throw new Error('Server error. Please try again later.');
         }
         throw new Error(`Failed to generate report (${response.status})`);
       }
@@ -349,7 +450,6 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
             const parsed = JSON.parse(jsonStr);
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) {
-              // Remove any asterisks from the content
               const cleanContent = content.replace(/\*+/g, '');
               reportText += cleanContent;
               setGeneratedReport(reportText);
@@ -364,7 +464,6 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
       console.error('Report generation error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate report';
       
-      // If it's a network/configuration error, try fallback
       if (errorMessage.includes('fetch') || errorMessage.includes('Supabase') || errorMessage.includes('Failed to generate report')) {
         console.log('Network error, using fallback generation');
         await generateFallbackReport(enhancedTranscription, reportType);
@@ -400,16 +499,35 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
         wordCount,
         patientId: patientId || undefined,
         doctorName: doctorName || undefined,
+        audioUrl: undefined as string | undefined,
       };
 
-      await saveReport(report);
+      // Save report first to get the ID
+      const reportId = await saveReport(report);
+      
+      // Upload audio recording if available
+      if (audioBlob && reportId) {
+        toast({
+          title: 'Uploading recording...',
+          description: 'Saving audio file to storage.',
+        });
+        
+        const uploadedUrl = await uploadRecording(reportId);
+        if (uploadedUrl) {
+          // Update report with audio URL
+          await updateReport(reportId, { audioUrl: uploadedUrl });
+          toast({
+            title: 'Recording saved!',
+            description: 'Audio recording has been uploaded.',
+          });
+        }
+      }
       
       toast({
         title: 'Report saved!',
         description: 'Your report has been saved to history.',
       });
 
-      // Reset for new recording
       handleReset();
     } catch (err) {
       console.error('Save error:', err);
@@ -420,6 +538,8 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
       });
     }
   };
+
+  const error = speechError || recordingError;
 
   if (!isSupported) {
     return (
@@ -518,6 +638,23 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
                 )}
               </div>
 
+              {/* Audio Playback */}
+              {audioUrl && !isListening && (
+                <div className="flex items-center justify-center gap-3 p-3 rounded-lg bg-secondary/50">
+                  <Volume2 className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Recording available</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePlayAudio}
+                    className="gap-2"
+                  >
+                    {isPlayingAudio ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    {isPlayingAudio ? 'Pause' : 'Play'}
+                  </Button>
+                </div>
+              )}
+
               {error && (
                 <p className="text-center text-sm text-destructive">{error}</p>
               )}
@@ -535,27 +672,91 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
             ) : (
               <Card>
                 <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Transcription</CardTitle>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsEditingTranscription(true)}
-                      className="gap-2"
-                    >
-                      <Edit className="h-4 w-4" />
-                      Edit
-                    </Button>
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div className="flex items-center gap-2">
+                      <CardTitle>Transcription</CardTitle>
+                      {detectedSpeakers.length > 0 && (
+                        <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 rounded-full">
+                          <Users className="h-3 w-3 text-primary" />
+                          <span className="text-xs text-primary font-medium">
+                            {detectedSpeakers.join(', ')}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 mr-2">
+                        <Switch
+                          id="diarization"
+                          checked={enableDiarization}
+                          onCheckedChange={setEnableDiarization}
+                        />
+                        <Label htmlFor="diarization" className="text-xs cursor-pointer">
+                          Speaker Labels
+                        </Label>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleEnhanceTranscription}
+                        disabled={isEnhancing}
+                        className="gap-2"
+                      >
+                        {isEnhancing ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="h-4 w-4" />
+                            {enableDiarization ? 'Enhance & Identify Speakers' : 'Enhance with AI'}
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsEditingTranscription(true)}
+                        className="gap-2"
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-40 rounded-lg border bg-secondary/30 p-4">
-                    <p className="whitespace-pre-wrap">
-                      {editedTranscript || transcript}
+                    <div className="whitespace-pre-wrap space-y-2">
+                      {(editedTranscript || transcript).split('\n').map((line, index) => {
+                        const isDoctor = line.startsWith('DOCTOR:');
+                        const isPatient = line.startsWith('PATIENT:');
+                        
+                        if (isDoctor || isPatient) {
+                          return (
+                            <p key={index} className={cn(
+                              "rounded px-2 py-1",
+                              isDoctor && "bg-primary/10 border-l-2 border-primary",
+                              isPatient && "bg-secondary border-l-2 border-muted-foreground"
+                            )}>
+                              <span className={cn(
+                                "font-semibold",
+                                isDoctor && "text-primary",
+                                isPatient && "text-muted-foreground"
+                              )}>
+                                {isDoctor ? 'DOCTOR:' : 'PATIENT:'}
+                              </span>
+                              <span>{line.replace(/^(DOCTOR:|PATIENT:)/, '')}</span>
+                            </p>
+                          );
+                        }
+                        return line ? <p key={index}>{line}</p> : null;
+                      })}
                       {interimTranscript && (
                         <span className="text-muted-foreground">{interimTranscript}</span>
                       )}
-                    </p>
+                    </div>
                   </ScrollArea>
                 </CardContent>
               </Card>
