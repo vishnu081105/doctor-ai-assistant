@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       reports: {
         Row: {
+          audio_url: string | null
           created_at: string
           doctor_name: string | null
           duration: number
@@ -29,6 +30,7 @@ export type Database = {
           word_count: number
         }
         Insert: {
+          audio_url?: string | null
           created_at?: string
           doctor_name?: string | null
           duration?: number
@@ -42,6 +44,7 @@ export type Database = {
           word_count?: number
         }
         Update: {
+          audio_url?: string | null
           created_at?: string
           doctor_name?: string | null
           duration?: number

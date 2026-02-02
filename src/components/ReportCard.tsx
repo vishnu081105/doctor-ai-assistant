@@ -2,7 +2,7 @@ import { Report, ReportType } from '@/lib/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Download, Trash2, FileText, ClipboardList, Stethoscope } from 'lucide-react';
+import { Eye, Download, Trash2, FileText, ClipboardList, Stethoscope, Volume2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
@@ -38,11 +38,17 @@ export function ReportCard({ report, onDelete, onDownload }: ReportCardProps) {
               <Icon className="h-4 w-4" />
             </div>
             <div>
-              <CardTitle className="text-base">
+              <CardTitle className="text-base flex items-center gap-2">
                 {format(new Date(report.createdAt), 'MMM d, yyyy')}
+                {report.audioUrl && (
+                  <span title="Recording available">
+                    <Volume2 className="h-4 w-4 text-muted-foreground" />
+                  </span>
+                )}
               </CardTitle>
               <CardDescription>
                 {format(new Date(report.createdAt), 'h:mm a')} • {formatDuration(report.duration)} • {report.wordCount} words
+                {report.patientId && ` • Patient: ${report.patientId}`}
               </CardDescription>
             </div>
           </div>
