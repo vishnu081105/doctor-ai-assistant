@@ -13,6 +13,7 @@ export interface Report {
   wordCount: number;
   patientId?: string;
   doctorName?: string;
+  audioUrl?: string;
 }
 
 export interface Template {
@@ -39,9 +40,9 @@ async function getCurrentUserId(): Promise<string> {
 const db = supabase as any;
 
 // Report operations
-export async function saveReport(report: Omit<Report, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
+export async function saveReport(report: Omit<Report, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
   const userId = await getCurrentUserId();
-  const { error } = await db
+  const { data, error } = await db
     .from('reports')
     .insert({
       user_id: userId,
@@ -52,11 +53,15 @@ export async function saveReport(report: Omit<Report, 'id' | 'createdAt' | 'upda
       word_count: report.wordCount,
       patient_id: report.patientId,
       doctor_name: report.doctorName,
-    });
+      audio_url: report.audioUrl,
+    })
+    .select('id')
+    .single();
   if (error) {
     console.error('Error saving report:', error);
     throw new Error(`Failed to save report: ${error.message}`);
   }
+  return data.id;
 }
 
 export async function getReport(id: string): Promise<Report | undefined> {
@@ -83,6 +88,7 @@ export async function getReport(id: string): Promise<Report | undefined> {
     wordCount: data.word_count,
     patientId: data.patient_id,
     doctorName: data.doctor_name,
+    audioUrl: data.audio_url,
   };
 }
 
@@ -105,6 +111,7 @@ export async function getAllReports(): Promise<Report[]> {
     wordCount: row.word_count,
     patientId: row.patient_id,
     doctorName: row.doctor_name,
+    audioUrl: row.audio_url,
   }));
 }
 
@@ -128,6 +135,7 @@ export async function updateReport(id: string, updates: Partial<Omit<Report, 'id
   if (updates.wordCount !== undefined) updateData.word_count = updates.wordCount;
   if (updates.patientId !== undefined) updateData.patient_id = updates.patientId;
   if (updates.doctorName !== undefined) updateData.doctor_name = updates.doctorName;
+  if (updates.audioUrl !== undefined) updateData.audio_url = updates.audioUrl;
   updateData.updated_at = new Date().toISOString();
 
   const { error } = await db
@@ -158,6 +166,7 @@ export async function searchReports(query: string): Promise<Report[]> {
     wordCount: row.word_count,
     patientId: row.patient_id,
     doctorName: row.doctor_name,
+    audioUrl: row.audio_url,
   }));
 }
 

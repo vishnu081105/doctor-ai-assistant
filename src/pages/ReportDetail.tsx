@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { getReport, updateReport, deleteReport, Report, ReportType } from '@/lib/db';
@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Save, Trash2, Download, Edit, FileText, ClipboardList, Stethoscope, Loader2, FileDown, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Download, Edit, FileText, ClipboardList, Stethoscope, Loader2, FileDown, ChevronDown, Play, Pause, Volume2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -32,6 +32,8 @@ export default function ReportDetail() {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const loadReport = async () => {
@@ -252,11 +254,52 @@ ${report.reportContent}
               </div>
             </div>
 
-            <div className="mt-4 flex gap-4 text-sm text-muted-foreground">
+            <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted-foreground">
               <span>Duration: {Math.floor(report.duration / 60)}:{(report.duration % 60).toString().padStart(2, '0')}</span>
               <span>•</span>
               <span>{report.wordCount} words</span>
+              {report.patientId && (
+                <>
+                  <span>•</span>
+                  <span>Patient: {report.patientId}</span>
+                </>
+              )}
+              {report.doctorName && (
+                <>
+                  <span>•</span>
+                  <span>Dr. {report.doctorName}</span>
+                </>
+              )}
             </div>
+
+            {/* Audio Playback */}
+            {report.audioUrl && (
+              <div className="mt-4 flex items-center gap-3 p-3 rounded-lg bg-secondary/50">
+                <Volume2 className="h-5 w-5 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Recording available</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (!audioRef.current) {
+                      audioRef.current = new Audio(report.audioUrl);
+                      audioRef.current.onended = () => setIsPlayingAudio(false);
+                    }
+                    if (isPlayingAudio) {
+                      audioRef.current.pause();
+                      setIsPlayingAudio(false);
+                    } else {
+                      audioRef.current.play();
+                      setIsPlayingAudio(true);
+                    }
+                  }}
+                  className="gap-2"
+                >
+                  {isPlayingAudio ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                  {isPlayingAudio ? 'Pause' : 'Play Recording'}
+                </Button>
+              </div>
+            )}
           </CardHeader>
 
           <CardContent className="pt-6">
@@ -290,9 +333,32 @@ ${report.reportContent}
 
               <TabsContent value="transcription">
                 <ScrollArea className="h-[400px] rounded-lg border bg-secondary/30 p-4">
-                  <p className="whitespace-pre-wrap text-muted-foreground">
-                    {report.transcription}
-                  </p>
+                  <div className="whitespace-pre-wrap text-muted-foreground space-y-2">
+                    {report.transcription.split('\n').map((line, index) => {
+                      const isDoctor = line.startsWith('DOCTOR:');
+                      const isPatient = line.startsWith('PATIENT:');
+                      
+                      if (isDoctor || isPatient) {
+                        return (
+                          <p key={index} className={cn(
+                            "rounded px-2 py-1",
+                            isDoctor && "bg-primary/10 border-l-2 border-primary",
+                            isPatient && "bg-secondary border-l-2 border-muted-foreground"
+                          )}>
+                            <span className={cn(
+                              "font-semibold",
+                              isDoctor && "text-primary",
+                              isPatient && "text-foreground"
+                            )}>
+                              {isDoctor ? 'DOCTOR:' : 'PATIENT:'}
+                            </span>
+                            <span>{line.replace(/^(DOCTOR:|PATIENT:)/, '')}</span>
+                          </p>
+                        );
+                      }
+                      return line ? <p key={index}>{line}</p> : null;
+                    })}
+                  </div>
                 </ScrollArea>
               </TabsContent>
             </Tabs>
