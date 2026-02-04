@@ -5,13 +5,15 @@ import { ReportTypeSelector } from '@/components/ReportTypeSelector';
 import { TranscriptionEditor } from '@/components/TranscriptionEditor';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
+import { useWhisperTranscription } from '@/hooks/useWhisperTranscription';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Mic, Square, Sparkles, Loader2, Save, RotateCcw, AlertCircle, Edit, Wand2, Users, Play, Pause, Volume2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Mic, Square, Sparkles, Loader2, Save, RotateCcw, AlertCircle, Edit, Wand2, Users, Play, Pause, Volume2, Zap } from 'lucide-react';
 import { ReportType, saveReport, getSetting, updateReport } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -31,6 +33,7 @@ export default function Dashboard() {
   const [enableDiarization, setEnableDiarization] = useState(true);
   const [detectedSpeakers, setDetectedSpeakers] = useState<string[]>([]);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [whisperTranscript, setWhisperTranscript] = useState('');
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   
@@ -39,7 +42,7 @@ export default function Dashboard() {
   
   const {
     isListening,
-    transcript,
+    transcript: liveTranscript,
     interimTranscript,
     startListening,
     stopListening,
@@ -57,6 +60,16 @@ export default function Dashboard() {
     uploadRecording,
     error: recordingError,
   } = useAudioRecording();
+
+  const {
+    transcribe: whisperTranscribe,
+    isTranscribing: isWhisperTranscribing,
+    error: whisperError,
+    progress: whisperProgress,
+  } = useWhisperTranscription();
+
+  // Use Whisper transcript if available, otherwise fall back to live transcript
+  const transcript = whisperTranscript || liveTranscript;
 
   // Load doctor name from settings
   useEffect(() => {
@@ -97,15 +110,40 @@ export default function Dashboard() {
     setIsEditingTranscription(false);
     setEditedTranscript('');
     setDetectedSpeakers([]);
+    setWhisperTranscript('');
     
-    // Start both speech recognition and audio recording
+    // Start both speech recognition (for live preview) and audio recording (for Whisper)
     await startRecording();
     startListening();
   };
 
   const handleStopRecording = async () => {
     stopListening();
-    await stopRecording();
+    const recordedBlob = await stopRecording();
+    
+    // Automatically transcribe with Whisper after recording stops
+    if (recordedBlob && recordedBlob.size > 0) {
+      toast({
+        title: 'Processing with Whisper AI',
+        description: 'Transcribing your recording with OpenAI Whisper...',
+      });
+      
+      const result = await whisperTranscribe(recordedBlob);
+      if (result && result.text) {
+        setWhisperTranscript(result.text);
+        setEditedTranscript(result.text);
+        toast({
+          title: 'Whisper Transcription Complete',
+          description: `Transcribed ${Math.round(result.duration)}s of audio with high accuracy.`,
+        });
+      } else if (whisperError) {
+        toast({
+          variant: 'destructive',
+          title: 'Whisper Transcription Failed',
+          description: whisperError || 'Falling back to live transcription.',
+        });
+      }
+    }
   };
 
   const handleReset = () => {
@@ -117,6 +155,7 @@ export default function Dashboard() {
     setEditedTranscript('');
     setPatientId('');
     setDetectedSpeakers([]);
+    setWhisperTranscript('');
   };
 
   const handleSaveTranscriptionEdit = (text: string) => {
@@ -565,9 +604,15 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
       
       <main className="container max-w-4xl py-8">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold">Voice Recording</h1>
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <h1 className="text-3xl font-bold">Voice Recording</h1>
+            <Badge variant="secondary" className="gap-1 bg-primary/10 text-primary border-primary/20">
+              <Zap className="h-3 w-3" />
+              Whisper AI
+            </Badge>
+          </div>
           <p className="mt-2 text-muted-foreground">
-            Record your medical notes and generate AI-powered reports
+            Record your medical notes and generate AI-powered reports with OpenAI Whisper
           </p>
         </div>
 
@@ -577,9 +622,21 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Recording</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    Recording
+                    {isWhisperTranscribing && (
+                      <Badge variant="outline" className="gap-1 text-xs">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        {whisperProgress}
+                      </Badge>
+                    )}
+                  </CardTitle>
                   <CardDescription>
-                    {isListening ? 'Listening to your voice...' : 'Click the microphone to start recording'}
+                    {isListening 
+                      ? 'Listening to your voice...' 
+                      : isWhisperTranscribing 
+                        ? 'Processing with Whisper AI...'
+                        : 'Click the microphone to start recording'}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-4">
