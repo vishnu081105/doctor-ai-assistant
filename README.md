@@ -30,7 +30,12 @@ A comprehensive AI-powered medical documentation platform that transforms voice 
 ## ✨ Features
 
 ### 🎤 Voice Recording & Transcription
-- **Real-time Speech-to-Text**: Browser-based Web Speech API for live transcription
+- **OpenAI Whisper Integration**: Industry-leading speech-to-text with the Whisper Large-v3 model
+  - Best accuracy for natural dialogue
+  - Handles accents, interruptions, and fast speech
+  - Very low hallucination rate
+  - Strong medical terminology recognition
+- **Real-time Preview**: Browser-based Web Speech API provides live transcription preview while recording
 - **Audio Recording**: Capture consultation audio with MediaRecorder API
 - **Audio Playback**: Listen to recorded consultations anytime
 - **Cloud Storage**: Secure audio file storage in Supabase Storage buckets
@@ -97,9 +102,10 @@ Three professional report formats powered by **Google Gemini AI**:
 ### AI Services
 | Service | Purpose |
 |---------|---------|
+| **OpenAI Whisper** | High-accuracy speech-to-text transcription |
 | **Lovable AI Gateway** | Managed AI API access |
 | **Google Gemini 3 Flash** | Report generation & text processing |
-| **Web Speech API** | Browser-based speech recognition |
+| **Web Speech API** | Browser-based live transcription preview |
 
 ---
 
@@ -114,7 +120,7 @@ Three professional report formats powered by **Google Gemini AI**:
 │  │ - Dashboard │  │ - Header    │  │ - useAuth   │              │
 │  │ - History   │  │ - AudioWave │  │ - useSpeech │              │
 │  │ - Profile   │  │ - ReportCard│  │ - useAudio  │              │
-│  │ - Login     │  │ - Editor    │  │ - useToast  │              │
+│  │ - Login     │  │ - Editor    │  │ - useWhisper│              │
 │  └─────────────┘  └─────────────┘  └─────────────┘              │
 └─────────────────────────────────────────────────────────────────┘
                               │
@@ -128,6 +134,7 @@ Three professional report formats powered by **Google Gemini AI**:
 │  │ • reports        │  │ • generate-report│                     │
 │  │ • templates      │  │ • enhance-trans  │                     │
 │  │ • settings       │  │ • process-trans  │                     │
+│  │                  │  │ • whisper-trans  │                     │
 │  └──────────────────┘  └────────┬─────────┘                     │
 │                                 │                                │
 │  ┌──────────────────┐           │                                │
@@ -330,6 +337,43 @@ Identifies and labels speakers in medical conversations.
   "hasEnhancement": true
 }
 ```
+
+---
+
+#### 4. Whisper Transcribe
+High-accuracy speech-to-text using OpenAI Whisper Large-v3 model.
+
+**Endpoint:** `POST /functions/v1/whisper-transcribe`
+
+**Request:** `multipart/form-data`
+```
+audio: <audio_file> (webm, mp3, wav, ogg, mp4)
+language: "en" (optional, ISO 639-1)
+```
+
+**Response:**
+```json
+{
+  "text": "The patient presented with severe headaches lasting for three days...",
+  "duration": 45.6,
+  "language": "en",
+  "segments": [
+    { "start": 0.0, "end": 3.5, "text": "The patient presented..." }
+  ]
+}
+```
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+Content-Type: multipart/form-data
+```
+
+**Features:**
+- Best accuracy for natural medical dialogue
+- Handles accents, interruptions, and fast speech
+- Very low hallucination rate
+- Strong medical terminology recognition
 
 ---
 
