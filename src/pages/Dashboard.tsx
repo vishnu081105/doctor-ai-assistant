@@ -470,30 +470,45 @@ Note: This is a basic summary. For comprehensive AI-powered reports, please depl
 
         textBuffer += decoder.decode(value, { stream: true });
 
-        let newlineIndex: number;
-        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
-          let line = textBuffer.slice(0, newlineIndex);
-          textBuffer = textBuffer.slice(newlineIndex + 1);
+        const lines = textBuffer.split('\n');
+        // Keep the last incomplete line in the buffer
+        textBuffer = lines.pop() || '';
 
-          if (line.endsWith('\r')) line = line.slice(0, -1);
+        for (const rawLine of lines) {
+          const line = rawLine.replace(/\r$/, '');
+          // Skip SSE comments (like ": OPENROUTER PROCESSING") and empty lines
           if (line.startsWith(':') || line.trim() === '') continue;
           if (!line.startsWith('data: ')) continue;
 
           const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
+          if (jsonStr === '[DONE]') continue;
 
           try {
             const parsed = JSON.parse(jsonStr);
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) {
-              const cleanContent = content.replace(/\*+/g, '');
+              const cleanContent = content.replace(/\*+/g, '').replace(/#+/g, '');
               reportText += cleanContent;
               setGeneratedReport(reportText);
             }
-          } catch {
-            textBuffer = line + '\n' + textBuffer;
-            break;
+          } catch (e) {
+            // Skip malformed JSON lines instead of re-buffering
+            console.warn('Skipping malformed SSE chunk:', jsonStr?.slice(0, 100));
           }
+        }
+      }
+
+      // Process any remaining buffer
+      if (textBuffer.trim() && textBuffer.startsWith('data: ') && textBuffer.slice(6).trim() !== '[DONE]') {
+        try {
+          const parsed = JSON.parse(textBuffer.slice(6).trim());
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) {
+            reportText += content.replace(/\*+/g, '').replace(/#+/g, '');
+            setGeneratedReport(reportText);
+          }
+        } catch {
+          // ignore
         }
       }
     } catch (err) {
