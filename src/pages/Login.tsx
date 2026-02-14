@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Activity, Loader2, Mail, Lock, User } from 'lucide-react';
+import { Building2, Loader2, Mail, Lock, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { setSetting } from '@/lib/db';
 
@@ -110,12 +110,12 @@ export default function Login() {
       </div>
 
       <div className="relative mb-8 flex items-center gap-3">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent shadow-lg shadow-primary/25">
-          <Activity className="h-8 w-8 text-primary-foreground" />
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[hsl(217,89%,61%)] shadow-lg shadow-primary/25">
+          <Building2 className="h-8 w-8 text-primary-foreground" />
         </div>
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">MediVoice</h1>
-          <p className="text-sm text-muted-foreground">AI-Powered Medical Transcription</p>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">KMCH Hospital</h1>
+          <p className="text-sm text-muted-foreground">Voice Recording & Transcription System</p>
         </div>
       </div>
 

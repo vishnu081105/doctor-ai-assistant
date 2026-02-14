@@ -437,7 +437,7 @@ export default function Dashboard() {
       
       <main className="container max-w-[1400px] py-6 px-4">
         {/* App Header - matching the HTML design */}
-        <div className="rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground p-6 mb-6 shadow-lg">
+        <div className="rounded-xl bg-gradient-to-r from-primary to-[hsl(217,89%,61%)] text-primary-foreground p-6 mb-6 shadow-lg">
           <div className="flex items-center gap-3">
             <Activity className="h-8 w-8" />
             <div>
@@ -469,7 +469,7 @@ export default function Dashboard() {
           {/* ==================== RECORDING TAB ==================== */}
           <TabsContent value="recording" className="space-y-4">
             <Card>
-              <CardHeader className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-t-lg">
+              <CardHeader className="bg-gradient-to-r from-primary to-[hsl(217,89%,61%)] text-primary-foreground rounded-t-lg">
                 <CardTitle className="flex items-center gap-2">
                   <Mic className="h-5 w-5" />
                   Record Doctor's Notes
@@ -789,7 +789,7 @@ export default function Dashboard() {
           {/* ==================== PATIENT RECORDS TAB ==================== */}
           <TabsContent value="records" className="space-y-4">
             <Card>
-              <CardHeader className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-t-lg">
+              <CardHeader className="bg-gradient-to-r from-primary to-[hsl(217,89%,61%)] text-primary-foreground rounded-t-lg">
                 <CardTitle className="flex items-center gap-2">
                   <ClipboardList className="h-5 w-5" />
                   Patient Records
