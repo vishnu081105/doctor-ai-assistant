@@ -17,7 +17,8 @@ import {
   LogOut,
   User,
   Home,
-  FileText
+  FileText,
+  Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
@@ -66,11 +67,14 @@ export function Header() {
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80 shadow-md">
-            <FileText className="h-5 w-5 text-primary-foreground" />
+            <Building2 className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
-            MediVoice
-          </span>
+          <div className="flex flex-col">
+            <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
+              KMCH Hospital
+            </span>
+            <span className="text-[10px] text-muted-foreground -mt-1 hidden sm:block">Voice Recording System</span>
+          </div>
         </Link>
 
         {/* Right side - Navigation + Profile grouped together */}
